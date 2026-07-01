@@ -1,4 +1,4 @@
-import { dbConnect } from "@/lib/dbConnect";
+import { connectMongoose } from "@/lib/mongoose";
 import {
   Promoter,
   hashPassword,
@@ -54,17 +54,17 @@ export async function POST(request: Request) {
 
     if (!agreedToShariah) {
       return NextResponse.json(
-        { message: "অ্যাকাউন্ট তৈরি করতে ইনশিরাহ প্ল্যাটফর্মের \"জু'আলাহ ও দা'লালী\" সংক্রান্ত শরয়ী নীতিমালা এবং শর্তাবলীতে সম্মত হওয়া বাধ্যতামূলক।" },
+        { message: "শরীয়াহ নীতিমালায় সম্মতি দিতে হবে।" },
         { status: 400 },
       );
     }
 
-    await dbConnect();
+    await connectMongoose();
 
     const existingPromoter = await Promoter.findOne({ email }).lean();
     if (existingPromoter) {
       return NextResponse.json(
-        { message: "এই ইমেইলটি দিয়ে ইতিমধ্যে একটি অ্যাকাউন্ট তৈরি করা হয়েছে।" },
+        { message: "এই ইমেইল দিয়ে ইতিমধ্যে একটি অ্যাকাউন্ট আছে।" },
         { status: 409 },
       );
     }
@@ -79,7 +79,7 @@ export async function POST(request: Request) {
     });
 
     return NextResponse.json({
-      message: "আলহামদুলিল্লাহ, আপনার প্রমোটার অ্যাকাউন্টটি সফলভাবে তৈরি হয়েছে!",
+      message: "আপনার প্রমোটার অ্যাকাউন্ট সফলভাবে তৈরি হয়েছে।",
     });
   } catch (error) {
     console.error("Promoter registration failed:", error);
