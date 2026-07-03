@@ -9,45 +9,13 @@ const notoSansBengali = Noto_Sans_Bengali({
 });
 
 interface Product {
-  id: string;
+  _id: string;
   title: string;
   price: number;
-  commission: number;
   commissionPercentage: number;
   stockQuantity: number;
-  imagePlaceholder: string;
+  imageUrl: string;
 }
-
-// Hardcoded mock products — replace with a real API fetch in a future phase
-const MOCK_PRODUCTS: Product[] = [
-  {
-    id: "prod-001",
-    title: "প্রিমিয়াম সুন্নতি আতর",
-    price: 800,
-    commission: 80,
-    commissionPercentage: 10,
-    stockQuantity: 45,
-    imagePlaceholder: "https://via.placeholder.com/300x200/1a1a1a/4ade80?text=আতর",
-  },
-  {
-    id: "prod-002",
-    title: "মডার্ন সুতি হিজাব",
-    price: 650,
-    commission: 65,
-    commissionPercentage: 10,
-    stockQuantity: 32,
-    imagePlaceholder: "https://via.placeholder.com/300x200/1a1a1a/60a5fa?text=হিজাব",
-  },
-  {
-    id: "prod-003",
-    title: "অরিজিনাল দেশি মধু",
-    price: 1200,
-    commission: 120,
-    commissionPercentage: 10,
-    stockQuantity: 0,
-    imagePlaceholder: "https://via.placeholder.com/300x200/1a1a1a/fbbf24?text=মধু",
-  },
-];
 
 function formatBdt(amount: number) {
   return new Intl.NumberFormat("bn-BD", {
@@ -59,6 +27,20 @@ function formatBdt(amount: number) {
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
+function ProductCardSkeleton() {
+  return (
+    <div className="overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900">
+      <div className="aspect-[3/2] w-full animate-pulse bg-zinc-800" />
+      <div className="p-5 space-y-3">
+        <div className="h-5 w-3/4 animate-pulse rounded-lg bg-zinc-800" />
+        <div className="h-4 w-full animate-pulse rounded-lg bg-zinc-800" />
+        <div className="h-4 w-2/3 animate-pulse rounded-lg bg-zinc-800" />
+        <div className="mt-5 h-11 w-full animate-pulse rounded-xl bg-zinc-800" />
+      </div>
+    </div>
+  );
+}
+
 interface ProductCardProps {
   product: Product;
   onGenerateLink: (product: Product) => void;
@@ -66,6 +48,11 @@ interface ProductCardProps {
 
 function ProductCard({ product, onGenerateLink }: ProductCardProps) {
   const isOutOfStock = product.stockQuantity === 0;
+  const commission = Math.floor((product.price * product.commissionPercentage) / 100);
+
+  const imageSrc =
+    product.imageUrl ||
+    `https://placehold.co/300x200/1a1a1a/4ade80?text=${encodeURIComponent(product.title.slice(0, 4))}`;
 
   return (
     <div
@@ -78,14 +65,16 @@ function ProductCard({ product, onGenerateLink }: ProductCardProps) {
       <div className="aspect-[3/2] w-full overflow-hidden bg-zinc-950">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={product.imagePlaceholder}
+          src={imageSrc}
           alt={product.title}
           className="h-full w-full object-cover"
         />
       </div>
 
       <div className="p-5">
-        <h3 className="text-lg font-semibold text-zinc-50">{product.title}</h3>
+        <h3 className="text-lg font-semibold text-zinc-50 line-clamp-2">
+          {product.title}
+        </h3>
 
         <div className="mt-4 space-y-2">
           <div className="flex items-center justify-between">
@@ -97,7 +86,7 @@ function ProductCard({ product, onGenerateLink }: ProductCardProps) {
           <div className="flex items-center justify-between">
             <span className="text-sm text-zinc-400">আপনার কমিশন:</span>
             <span className="text-sm font-semibold text-emerald-400">
-              {product.commissionPercentage}% ({formatBdt(product.commission)})
+              {product.commissionPercentage}% ({formatBdt(commission)})
             </span>
           </div>
           <div className="flex items-center justify-between">
@@ -146,7 +135,7 @@ function LinkModal({ isOpen, onClose, product, promoterId }: LinkModalProps) {
       ? window.location.origin
       : "https://inshirah.com";
 
-  const uniqueLink = `${baseUrl}/p/${product.id}?ref=${promoterId}`;
+  const uniqueLink = `${baseUrl}/p/${product._id}?ref=${promoterId}`;
 
   const handleCopy = async () => {
     try {
@@ -154,7 +143,6 @@ function LinkModal({ isOpen, onClose, product, promoterId }: LinkModalProps) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // Fallback for browsers without clipboard API
       const el = document.createElement("textarea");
       el.value = uniqueLink;
       document.body.appendChild(el);
@@ -219,28 +207,46 @@ function LinkModal({ isOpen, onClose, product, promoterId }: LinkModalProps) {
 // ── Page component ────────────────────────────────────────────────────────────
 
 export default function MarketplacePage() {
+  const [products, setProducts] = useState<Product[]>([]);
+  const [isLoadingProducts, setIsLoadingProducts] = useState(true);
+  const [productsError, setProductsError] = useState<string | null>(null);
+
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  // Real promoter ID fetched from the session-backed profile endpoint
-  const [promoterId, setPromoterId] = useState<string>("");
-  const [isLoadingId, setIsLoadingId] = useState(true);
 
+  const [promoterId, setPromoterId] = useState<string>("");
+
+  // Fetch products and promoter ID in parallel
   useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        const res = await fetch("/api/products");
+        const data = await res.json();
+        if (!res.ok) {
+          setProductsError(data.error ?? "প্রোডাক্ট লোড করতে সমস্যা হয়েছে");
+          return;
+        }
+        setProducts(data.products as Product[]);
+      } catch {
+        setProductsError("নেটওয়ার্ক সমস্যা হয়েছে। পেজ রিফ্রেশ করুন।");
+      } finally {
+        setIsLoadingProducts(false);
+      }
+    };
+
     const fetchPromoterId = async () => {
       try {
         const res = await fetch("/api/promoter/profile");
         if (res.ok) {
           const data = await res.json();
-          // _id from MongoDB is returned as a string via lean()
           setPromoterId(data.promoter._id as string);
         }
       } catch {
-        // Non-critical: the link will just lack a ref param if this fails
-      } finally {
-        setIsLoadingId(false);
+        // Non-critical — link will just lack a ref param
       }
     };
 
+    fetchProducts();
     fetchPromoterId();
   }, []);
 
@@ -265,22 +271,48 @@ export default function MarketplacePage() {
           নিচের তালিকা থেকে প্রোডাক্ট বেছে নিয়ে আপনার ইউনিক প্রমোশন লিংক
           তৈরি করুন।
         </p>
-        {isLoadingId && (
-          <p className="mt-2 text-xs text-zinc-600">
-            আপনার প্রোফাইল লোড হচ্ছে…
-          </p>
-        )}
       </section>
 
-      <section className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-        {MOCK_PRODUCTS.map((product) => (
-          <ProductCard
-            key={product.id}
-            product={product}
-            onGenerateLink={handleGenerateLink}
-          />
-        ))}
-      </section>
+      {/* Error state */}
+      {productsError && (
+        <p className="rounded-lg border border-red-800/50 bg-red-950/20 px-4 py-3 text-sm text-red-400">
+          {productsError}
+        </p>
+      )}
+
+      {/* Loading skeletons */}
+      {isLoadingProducts && (
+        <section className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <ProductCardSkeleton key={i} />
+          ))}
+        </section>
+      )}
+
+      {/* Empty state */}
+      {!isLoadingProducts && !productsError && products.length === 0 && (
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-900 py-16 text-center">
+          <p className="text-lg font-semibold text-zinc-300">
+            এখনো কোনো প্রোডাক্ট নেই
+          </p>
+          <p className="mt-2 text-sm text-zinc-500">
+            মার্চেন্টরা প্রোডাক্ট যুক্ত করলে এখানে দেখাবে।
+          </p>
+        </div>
+      )}
+
+      {/* Product grid */}
+      {!isLoadingProducts && products.length > 0 && (
+        <section className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {products.map((product) => (
+            <ProductCard
+              key={product._id}
+              product={product}
+              onGenerateLink={handleGenerateLink}
+            />
+          ))}
+        </section>
+      )}
 
       <LinkModal
         isOpen={isModalOpen}

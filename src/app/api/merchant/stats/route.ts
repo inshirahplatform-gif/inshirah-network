@@ -6,14 +6,11 @@ import { Product, Order } from "@/models";
 
 export async function GET(_request: NextRequest) {
   try {
-    const cookieStore = await cookies();
+    const cookieStore   = await cookies();
     const sessionCookie = cookieStore.get(COOKIE_NAME);
 
     if (!sessionCookie) {
-      return NextResponse.json(
-        { error: "অনুগ্রহ করে লগ-ইন করুন" },
-        { status: 401 }
-      );
+      return NextResponse.json({ error: "অনুগ্রহ করে লগ-ইন করুন" }, { status: 401 });
     }
 
     const session = await verifySession(sessionCookie.value);
@@ -25,55 +22,48 @@ export async function GET(_request: NextRequest) {
     }
 
     if (session.role !== "merchant") {
-      return NextResponse.json(
-        { error: "অ্যাক্সেস নিষিদ্ধ" },
-        { status: 403 }
-      );
+      return NextResponse.json({ error: "অ্যাক্সেস নিষিদ্ধ" }, { status: 403 });
     }
 
     await dbConnect();
-
     const merchantId = session.userId;
 
-    // Run all queries in parallel for performance
-    const [
-      activeListings,
-      pendingOrders,
-      deliveredOrders,
-      recentOrders,
-    ] = await Promise.all([
-      Product.countDocuments({ merchantId, status: "active" }),
-      Order.countDocuments({ merchantId, status: "Pending" }),
-      Order.find({ merchantId, status: "Delivered" })
-        .select("totalAmount commissionAmount")
-        .lean(),
-      Order.find({ merchantId })
-        .sort({ createdAt: -1 })
-        .limit(5)
-        .select("customerName totalAmount status createdAt")
-        .lean(),
-    ]);
+    const [activeListings, deliveredOrders, pendingOrders, recentOrders] =
+      await Promise.all([
+        Product.countDocuments({ merchantId, status: "active" }),
+        Order.find({ merchantId, status: "Delivered" })
+          .select("totalAmount commissionAmount")
+          .lean(),
+        // Full pending order objects for the courier booking table
+        Order.find({ merchantId, status: { $in: ["Pending", "Shipped"] } })
+          .sort({ createdAt: -1 })
+          .select(
+            "customerName customerPhone shippingAddress totalAmount status " +
+            "courierTrackingId courierStatus pickupName pickupPhone pickupAddress createdAt"
+          )
+          .lean(),
+        Order.find({ merchantId })
+          .sort({ createdAt: -1 })
+          .limit(5)
+          .select("customerName totalAmount status createdAt courierTrackingId courierStatus")
+          .lean(),
+      ]);
 
-    const totalRevenue = deliveredOrders.reduce(
-      (sum, o) => sum + o.totalAmount,
-      0
-    );
-    const totalCommissionsPaid = deliveredOrders.reduce(
-      (sum, o) => sum + o.commissionAmount,
-      0
-    );
-    const netRevenue = totalRevenue - totalCommissionsPaid;
+    const totalRevenue        = deliveredOrders.reduce((s, o) => s + o.totalAmount, 0);
+    const totalCommissionsPaid = deliveredOrders.reduce((s, o) => s + o.commissionAmount, 0);
+    const netRevenue          = totalRevenue - totalCommissionsPaid;
 
     return NextResponse.json(
       {
         stats: {
           activeListings,
-          pendingOrders,
+          pendingOrders: pendingOrders.length,
           totalDelivered: deliveredOrders.length,
           totalRevenue,
           netRevenue,
         },
-        recentOrders,
+        pendingOrders,   // full objects used by the courier booking table
+        recentOrders,    // last 5 for the mini-summary strip
       },
       { status: 200 }
     );
