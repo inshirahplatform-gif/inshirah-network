@@ -22,8 +22,13 @@ const payoutRequestSchema = new Schema(
     },
     requestedAt: { type: Date, default: Date.now },
   },
-  { timestamps: true },
+  { timestamps: true }
 );
+
+// Admin payout queue: filter pending requests per promoter
+payoutRequestSchema.index({ promoterId: 1, status: 1 });
+// Admin dashboard: all pending requests sorted by request date
+payoutRequestSchema.index({ status: 1, requestedAt: -1 });
 
 export type PayoutRequestDocument = {
   promoterId: Types.ObjectId;

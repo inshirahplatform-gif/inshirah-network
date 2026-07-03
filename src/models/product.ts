@@ -15,8 +15,13 @@ const productSchema = new Schema(
       default: "active",
     },
   },
-  { timestamps: true },
+  { timestamps: true }
 );
+
+// Compound index: merchant product listings filtered by status (most common query)
+productSchema.index({ merchantId: 1, status: 1 });
+// Public marketplace query: all active products sorted by newest
+productSchema.index({ status: 1, createdAt: -1 });
 
 export type ProductDocument = {
   title: string;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Noto_Sans_Bengali } from "next/font/google";
 
 const notoSansBengali = Noto_Sans_Bengali({
@@ -18,10 +18,11 @@ interface Product {
   imagePlaceholder: string;
 }
 
+// Hardcoded mock products — replace with a real API fetch in a future phase
 const MOCK_PRODUCTS: Product[] = [
   {
     id: "prod-001",
-    title: "প্রিমিয়াম সুন্নতি আতর",
+    title: "প্রিমিয়াম সুন্নতি আতর",
     price: 800,
     commission: 80,
     commissionPercentage: 10,
@@ -48,8 +49,6 @@ const MOCK_PRODUCTS: Product[] = [
   },
 ];
 
-const PROMOTER_ID = "promoter-123";
-
 function formatBdt(amount: number) {
   return new Intl.NumberFormat("bn-BD", {
     style: "currency",
@@ -57,6 +56,8 @@ function formatBdt(amount: number) {
     maximumFractionDigits: 0,
   }).format(amount);
 }
+
+// ── Sub-components ────────────────────────────────────────────────────────────
 
 interface ProductCardProps {
   product: Product;
@@ -75,6 +76,7 @@ function ProductCard({ product, onGenerateLink }: ProductCardProps) {
       }`}
     >
       <div className="aspect-[3/2] w-full overflow-hidden bg-zinc-950">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={product.imagePlaceholder}
           alt={product.title}
@@ -92,24 +94,20 @@ function ProductCard({ product, onGenerateLink }: ProductCardProps) {
               {formatBdt(product.price)}
             </span>
           </div>
-
           <div className="flex items-center justify-between">
             <span className="text-sm text-zinc-400">আপনার কমিশন:</span>
             <span className="text-sm font-semibold text-emerald-400">
               {product.commissionPercentage}% ({formatBdt(product.commission)})
             </span>
           </div>
-
           <div className="flex items-center justify-between">
-            <span className="text-sm text-zinc-400">স্টক আছে:</span>
+            <span className="text-sm text-zinc-400">স্টক:</span>
             <span
               className={`text-sm font-semibold ${
                 isOutOfStock ? "text-red-400" : "text-zinc-50"
               }`}
             >
-              {isOutOfStock
-                ? "স্টক শেষ"
-                : `${product.stockQuantity} পিস`}
+              {isOutOfStock ? "স্টক শেষ" : `${product.stockQuantity} পিস`}
             </span>
           </div>
         </div>
@@ -124,7 +122,7 @@ function ProductCard({ product, onGenerateLink }: ProductCardProps) {
               : "bg-emerald-700 text-white hover:bg-emerald-600 focus-visible:outline-emerald-500"
           }`}
         >
-          {isOutOfStock ? "লিংক তৈরি করা সম্ভব নয়" : "লিংক তৈরি করুন"}
+          {isOutOfStock ? "লিংক তৈরি করা সম্ভব নয়" : "লিংক তৈরি করুন"}
         </button>
       </div>
     </div>
@@ -135,22 +133,36 @@ interface LinkModalProps {
   isOpen: boolean;
   onClose: () => void;
   product: Product | null;
+  promoterId: string;
 }
 
-function LinkModal({ isOpen, onClose, product }: LinkModalProps) {
+function LinkModal({ isOpen, onClose, product, promoterId }: LinkModalProps) {
   const [copied, setCopied] = useState(false);
 
   if (!isOpen || !product) return null;
 
-  const uniqueLink = `https://inshirah.com/p/${product.id}?ref=${PROMOTER_ID}`;
+  const baseUrl =
+    typeof window !== "undefined"
+      ? window.location.origin
+      : "https://inshirah.com";
+
+  const uniqueLink = `${baseUrl}/p/${product.id}?ref=${promoterId}`;
 
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(uniqueLink);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch (err) {
-      console.error("Failed to copy:", err);
+    } catch {
+      // Fallback for browsers without clipboard API
+      const el = document.createElement("textarea");
+      el.value = uniqueLink;
+      document.body.appendChild(el);
+      el.select();
+      document.execCommand("copy");
+      document.body.removeChild(el);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
     }
   };
 
@@ -166,7 +178,7 @@ function LinkModal({ isOpen, onClose, product }: LinkModalProps) {
             আপনার ইউনিক প্রমোশন লিংক
           </h3>
           <p className="mt-2 text-sm text-zinc-400">
-            {product.title} - এর জন্য আপনার বিশেষ লিংক
+            {product.title} — এর জন্য আপনার বিশেষ লিংক
           </p>
         </div>
 
@@ -176,17 +188,21 @@ function LinkModal({ isOpen, onClose, product }: LinkModalProps) {
               type="text"
               readOnly
               value={uniqueLink}
-              className="flex-1 bg-transparent text-sm text-zinc-300 outline-none"
+              className="min-w-0 flex-1 bg-transparent text-sm text-zinc-300 outline-none"
             />
             <button
               type="button"
               onClick={handleCopy}
-              className="inline-flex h-9 items-center justify-center rounded-lg border border-zinc-700 bg-zinc-900 px-4 text-sm font-semibold text-zinc-50 transition-colors hover:border-emerald-700 hover:bg-emerald-950/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500"
+              className="shrink-0 inline-flex h-9 items-center justify-center rounded-lg border border-zinc-700 bg-zinc-900 px-4 text-sm font-semibold text-zinc-50 transition-colors hover:border-emerald-700 hover:bg-emerald-950/40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500"
             >
-              {copied ? "কপি হয়েছে" : "কপি করুন"}
+              {copied ? "✓ কপি হয়েছে" : "কপি করুন"}
             </button>
           </div>
         </div>
+
+        <p className="mt-3 text-xs text-zinc-600">
+          এই লিংকটি শেয়ার করুন — কেউ কিনলে আপনি কমিশন পাবেন।
+        </p>
 
         <button
           type="button"
@@ -200,9 +216,33 @@ function LinkModal({ isOpen, onClose, product }: LinkModalProps) {
   );
 }
 
+// ── Page component ────────────────────────────────────────────────────────────
+
 export default function MarketplacePage() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  // Real promoter ID fetched from the session-backed profile endpoint
+  const [promoterId, setPromoterId] = useState<string>("");
+  const [isLoadingId, setIsLoadingId] = useState(true);
+
+  useEffect(() => {
+    const fetchPromoterId = async () => {
+      try {
+        const res = await fetch("/api/promoter/profile");
+        if (res.ok) {
+          const data = await res.json();
+          // _id from MongoDB is returned as a string via lean()
+          setPromoterId(data.promoter._id as string);
+        }
+      } catch {
+        // Non-critical: the link will just lack a ref param if this fails
+      } finally {
+        setIsLoadingId(false);
+      }
+    };
+
+    fetchPromoterId();
+  }, []);
 
   const handleGenerateLink = (product: Product) => {
     setSelectedProduct(product);
@@ -222,9 +262,14 @@ export default function MarketplacePage() {
           হালাল প্রোডাক্ট লাইব্রেরি
         </h2>
         <p className="mt-3 max-w-2xl text-sm leading-7 text-zinc-400">
-          নিচের তালিকা থেকে প্রোডাক্ট বেছে নিয়ে আপনার ইউনিক প্রমোশন লিংক
+          নিচের তালিকা থেকে প্রোডাক্ট বেছে নিয়ে আপনার ইউনিক প্রমোশন লিংক
           তৈরি করুন।
         </p>
+        {isLoadingId && (
+          <p className="mt-2 text-xs text-zinc-600">
+            আপনার প্রোফাইল লোড হচ্ছে…
+          </p>
+        )}
       </section>
 
       <section className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
@@ -241,6 +286,7 @@ export default function MarketplacePage() {
         isOpen={isModalOpen}
         onClose={handleCloseModal}
         product={selectedProduct}
+        promoterId={promoterId}
       />
     </div>
   );

@@ -14,11 +14,11 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "Inshirah",
-    template: "%s | Inshirah",
+    default: "ইনশিরাহ",
+    template: "%s | ইনশিরাহ",
   },
   description:
-    "Inshirah — a Deeni affiliate network for promoters, merchants, and administrators.",
+    "ইনশিরাহ — বাংলাদেশের প্রথম শারীয়াহ-সম্মত দ্বীনি অ্যাফিলিয়েট নেটওয়ার্ক।",
 };
 
 export default function RootLayout({
@@ -28,7 +28,7 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="en"
+      lang="bn"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">{children}</body>

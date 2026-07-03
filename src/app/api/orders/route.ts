@@ -5,66 +5,57 @@ import { Order, Product, Promoter } from "@/models";
 
 export async function POST(request: NextRequest) {
   try {
-    // Database connection
     await dbConnect();
 
-    // Extract request body
     const body = await request.json();
     const { productId, customerName, customerPhone, shippingAddress } = body;
 
     // Validate required fields
     if (!productId || !customerName || !customerPhone || !shippingAddress) {
       return NextResponse.json(
-        { error: "সব প্রয়োজনীয় তথ্য দিন" },
+        { error: "সব প্রয়োজনীয় তথ্য দিন" },
         { status: 400 }
       );
     }
 
-    // Read tracking cookie for promoter ID
+    // Read the referrer tracking cookie for promoter attribution
     const cookieStore = await cookies();
     const referrerCookie = cookieStore.get("inshirah_referrer");
-    let promoterId: string | undefined;
+    const promoterId: string | undefined = referrerCookie?.value || undefined;
 
-    if (referrerCookie && referrerCookie.value) {
-      promoterId = referrerCookie.value;
-    }
-
-    // Fetch product from database
+    // Fetch and validate the product
     const product = await Product.findById(productId);
     if (!product) {
       return NextResponse.json(
-        { error: "প্রোডাক্ট পাওয়া যায়নি" },
+        { error: "প্রোডাক্ট পাওয়া যায়নি" },
         { status: 404 }
       );
     }
 
-    // Shariah & Stock Validation: Check if stock is available
+    // Shariah & stock validation
     if (product.stockQuantity < 1) {
       return NextResponse.json(
         {
-          error: "দুঃখিত, এই প্রোডাক্টটির স্টক এইমাত্র শেষ হয়ে গেছে। স্টক ছাড়া অর্ডার গ্রহণ করা শরীয়াহ পরিপন্থী।",
+          error:
+            "দুঃখিত, এই প্রোডাক্টটির স্টক এইমাত্র শেষ হয়ে গেছে। স্টক ছাড়া অর্ডার গ্রহণ করা শরীয়াহ পরিপন্থী।",
         },
         { status: 400 }
       );
     }
 
-    // Update stock: Deduct 1 from product's stockQuantity
+    // Deduct stock and auto-hide if it hits zero
     product.stockQuantity -= 1;
-
-    // If stock becomes 0, update status to 'hidden'
     if (product.stockQuantity === 0) {
       product.status = "hidden";
     }
-
     await product.save();
 
-    // Calculate commission if promoter exists
-    let commissionAmount = 0;
-    if (promoterId) {
-      commissionAmount = (product.price * product.commissionPercentage) / 100;
-    }
+    // Calculate commission amount (only meaningful if a promoter is attributed)
+    const commissionAmount = promoterId
+      ? (product.price * product.commissionPercentage) / 100
+      : 0;
 
-    // Create and save the order
+    // Create the order
     const order = await Order.create({
       productId,
       merchantId: product.merchantId,
@@ -77,20 +68,19 @@ export async function POST(request: NextRequest) {
       status: "Pending",
     });
 
-    // If promoter exists, update their balances
+    // Credit the promoter's pendingBalance only.
+    // totalEarned is updated later when the order is marked Delivered (80% share).
     if (promoterId && commissionAmount > 0) {
       const promoter = await Promoter.findById(promoterId);
       if (promoter) {
         promoter.pendingBalance += commissionAmount;
-        promoter.totalEarned += commissionAmount;
         await promoter.save();
       }
     }
 
-    // Return successful response
     return NextResponse.json(
       {
-        message: "আলহামদুলিল্লাহ, আপনার অর্ডারটি সফলভাবে গৃহীত হয়েছে।",
+        message: "আলহামদুলিল্লাহ, আপনার অর্ডারটি সফলভাবে গৃহীত হয়েছে।",
         order,
       },
       { status: 201 }
@@ -98,7 +88,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Order placement error:", error);
     return NextResponse.json(
-      { error: "অর্ডার গ্রহণে সমস্যা হয়েছে" },
+      { error: "অর্ডার গ্রহণে সমস্যা হয়েছে" },
       { status: 500 }
     );
   }

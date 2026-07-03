@@ -1,3 +1,6 @@
+"use client";
+
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Noto_Sans_Bengali } from "next/font/google";
 
@@ -5,12 +8,6 @@ const notoSansBengali = Noto_Sans_Bengali({
   subsets: ["bengali"],
   weight: ["400", "500", "600", "700"],
 });
-
-const MOCK_BALANCES = {
-  totalEarned: 1200,
-  pendingBalance: 300,
-  availableBalance: 900,
-} as const;
 
 const MIN_WITHDRAWAL = 500;
 
@@ -26,9 +23,10 @@ type StatCardProps = {
   label: string;
   value: string;
   accent?: "emerald" | "amber" | "sky";
+  loading?: boolean;
 };
 
-function StatCard({ label, value, accent = "emerald" }: StatCardProps) {
+function StatCard({ label, value, accent = "emerald", loading }: StatCardProps) {
   const accentClasses = {
     emerald: "from-emerald-500/15 to-transparent text-emerald-400",
     amber: "from-amber-500/15 to-transparent text-amber-400",
@@ -41,44 +39,119 @@ function StatCard({ label, value, accent = "emerald" }: StatCardProps) {
         className={`pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b ${accentClasses[accent]}`}
       />
       <p className="relative text-sm font-medium text-zinc-400">{label}</p>
-      <p className="relative mt-3 text-3xl font-bold tracking-tight text-zinc-50">
-        {value}
-      </p>
+      {loading ? (
+        <div className="relative mt-3 h-9 w-28 animate-pulse rounded-lg bg-zinc-800" />
+      ) : (
+        <p className="relative mt-3 text-3xl font-bold tracking-tight text-zinc-50">
+          {value}
+        </p>
+      )}
     </div>
   );
 }
 
+type PromoterData = {
+  fullName: string;
+  totalEarned: number;
+  pendingBalance: number;
+  availableBalance: number;
+};
+
 export default function PromoterDashboardPage() {
-  const canWithdraw = MOCK_BALANCES.availableBalance >= MIN_WITHDRAWAL;
+  const [promoter, setPromoter] = useState<PromoterData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isWithdrawing, setIsWithdrawing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      try {
+        const res = await fetch("/api/promoter/profile");
+        const data = await res.json();
+
+        if (!res.ok) {
+          setError(data.error ?? "প্রোফাইল লোড করতে সমস্যা হয়েছে");
+          return;
+        }
+
+        setPromoter({
+          fullName: data.promoter.fullName,
+          totalEarned: data.promoter.totalEarned ?? 0,
+          pendingBalance: data.promoter.pendingBalance ?? 0,
+          availableBalance: data.promoter.availableBalance ?? 0,
+        });
+      } catch {
+        setError("নেটওয়ার্ক সমস্যা হয়েছে। পেজ রিফ্রেশ করুন।");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchProfile();
+  }, []);
+
+  const canWithdraw =
+    !isLoading &&
+    promoter !== null &&
+    promoter.availableBalance >= MIN_WITHDRAWAL;
+
+  const handleWithdraw = async () => {
+    if (!canWithdraw || !promoter) return;
+
+    setIsWithdrawing(true);
+    try {
+      // Placeholder: a real implementation would open a withdrawal modal here.
+      // For now we just alert — the POST /api/promoter/withdraw requires
+      // paymentMethod and accountDetails which need a form/modal.
+      alert(
+        "উত্তোলন ফিচারটি শীঘ্রই আসছে। আপনার উপলব্ধ ব্যালেন্স: " +
+          formatBdt(promoter.availableBalance)
+      );
+    } finally {
+      setIsWithdrawing(false);
+    }
+  };
 
   return (
     <div className={`${notoSansBengali.className} space-y-8`}>
       <section>
         <p className="text-sm font-semibold text-emerald-400">প্রমোটার প্যানেল</p>
         <h2 className="mt-2 text-3xl font-bold tracking-tight text-zinc-50">
-          স্বাগতম, আপনার ড্যাশবোর্ড
+          {isLoading ? (
+            <span className="inline-block h-9 w-64 animate-pulse rounded-lg bg-zinc-800" />
+          ) : (
+            <>স্বাগতম, {promoter?.fullName ?? "প্রমোটার"}</>
+          )}
         </h2>
         <p className="mt-3 max-w-2xl text-sm leading-7 text-zinc-400">
-          আপনার আয়, ব্যালেন্স ও উত্তোলনের তথ্য এক জায়গায় দেখুন এবং নতুন
+          আপনার আয়, ব্যালেন্স ও উত্তোলনের তথ্য এক জায়গায় দেখুন এবং নতুন
           প্রোডাক্ট খুঁজে প্রচার শুরু করুন।
         </p>
+        {error && (
+          <p className="mt-3 rounded-lg border border-red-800/50 bg-red-950/20 px-4 py-3 text-sm text-red-400">
+            {error}
+          </p>
+        )}
       </section>
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
         <StatCard
-          label="মোট আয়"
-          value={formatBdt(MOCK_BALANCES.totalEarned)}
+          label="মোট আয়"
+          value={formatBdt(promoter?.totalEarned ?? 0)}
           accent="emerald"
+          loading={isLoading}
         />
         <StatCard
           label="পেন্ডিং ব্যালেন্স"
-          value={formatBdt(MOCK_BALANCES.pendingBalance)}
+          value={formatBdt(promoter?.pendingBalance ?? 0)}
           accent="amber"
+          loading={isLoading}
         />
         <StatCard
           label="উত্তোলনযোগ্য ব্যালেন্স"
-          value={formatBdt(MOCK_BALANCES.availableBalance)}
+          value={formatBdt(promoter?.availableBalance ?? 0)}
           accent="sky"
+          loading={isLoading}
         />
       </section>
 
@@ -88,23 +161,55 @@ export default function PromoterDashboardPage() {
           <h3 className="mt-2 text-xl font-semibold text-zinc-50">
             উত্তোলনযোগ্য ব্যালেন্স
           </h3>
-          <p className="mt-4 text-4xl font-bold tracking-tight text-emerald-400">
-            {formatBdt(MOCK_BALANCES.availableBalance)}
-          </p>
+          {isLoading ? (
+            <div className="mt-4 h-10 w-36 animate-pulse rounded-lg bg-zinc-800" />
+          ) : (
+            <p className="mt-4 text-4xl font-bold tracking-tight text-emerald-400">
+              {formatBdt(promoter?.availableBalance ?? 0)}
+            </p>
+          )}
           <p className="mt-3 text-sm leading-7 text-zinc-400">
-            যাচাইকৃত আয় থেকে বর্তমানে উত্তোলনের জন্য প্রস্তুত অর্থের পরিমাণ।
+            যাচাইকৃত আয় থেকে বর্তমানে উত্তোলনের জন্য প্রস্তুত অর্থের পরিমাণ।
           </p>
 
           <button
             type="button"
-            disabled={!canWithdraw}
-            className={`mt-6 inline-flex h-12 w-full items-center justify-center rounded-xl px-6 text-sm font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 sm:w-auto ${
-              canWithdraw
+            onClick={handleWithdraw}
+            disabled={!canWithdraw || isWithdrawing}
+            className={`mt-6 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl px-6 text-sm font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 sm:w-auto ${
+              canWithdraw && !isWithdrawing
                 ? "bg-emerald-700 text-white hover:bg-emerald-600 focus-visible:outline-emerald-500"
                 : "cursor-not-allowed bg-zinc-800 text-zinc-500 focus-visible:outline-zinc-600"
             }`}
           >
-            টাকা উত্তোলন করুন
+            {isWithdrawing ? (
+              <>
+                <svg
+                  className="h-4 w-4 animate-spin"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  />
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                  />
+                </svg>
+                প্রসেস হচ্ছে…
+              </>
+            ) : (
+              "টাকা উত্তোলন করুন"
+            )}
           </button>
 
           <p className="mt-3 text-sm text-zinc-500">
@@ -119,7 +224,7 @@ export default function PromoterDashboardPage() {
               নতুন প্রোডাক্ট খুঁজুন
             </h3>
             <p className="mt-3 text-sm leading-7 text-zinc-400">
-              মার্কেটপ্লেস থেকে হালাল ও অনুমোদিত প্রোডাক্ট বেছে নিয়ে আপনার
+              মার্কেটপ্লেস থেকে হালাল ও অনুমোদিত প্রোডাক্ট বেছে নিয়ে আপনার
               অ্যাফিলিয়েট লিংক তৈরি করুন।
             </p>
           </div>

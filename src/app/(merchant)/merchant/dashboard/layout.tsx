@@ -1,17 +1,45 @@
+import Link from "next/link";
+import { Noto_Sans_Bengali } from "next/font/google";
+
+const notoSansBengali = Noto_Sans_Bengali({
+  subsets: ["bengali"],
+  weight: ["400", "500", "600", "700"],
+});
+
 export default function MerchantDashboardLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    <div className="min-h-full bg-zinc-50 dark:bg-zinc-950">
-      <header className="border-b border-zinc-200 bg-white px-6 py-4 dark:border-zinc-800 dark:bg-zinc-900">
-        <p className="text-sm font-medium text-zinc-500">Merchant Panel</p>
-        <h1 className="text-lg font-semibold text-zinc-950 dark:text-zinc-50">
-          Dashboard
-        </h1>
+    <div className={`${notoSansBengali.className} min-h-full bg-zinc-950`}>
+      {/* Top nav */}
+      <header className="sticky top-0 z-10 border-b border-zinc-800 bg-zinc-900/90 backdrop-blur-sm">
+        <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-4">
+          <div>
+            <p className="text-xs font-medium text-zinc-500">মার্চেন্ট প্যানেল</p>
+            <p className="mt-0.5 text-sm font-semibold text-zinc-50">
+              ইনশিরাহ নেটওয়ার্ক
+            </p>
+          </div>
+          <nav className="flex items-center gap-1">
+            <Link
+              href="/merchant/dashboard"
+              className="rounded-lg px-3 py-2 text-sm font-medium text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-50"
+            >
+              ড্যাশবোর্ড
+            </Link>
+            <Link
+              href="/merchant/dashboard/upload"
+              className="rounded-lg px-3 py-2 text-sm font-medium text-zinc-400 transition-colors hover:bg-zinc-800 hover:text-zinc-50"
+            >
+              পণ্য যুক্ত করুন
+            </Link>
+          </nav>
+        </div>
       </header>
-      <div className="px-6 py-8">{children}</div>
+
+      <div className="mx-auto w-full max-w-6xl px-6 py-8">{children}</div>
     </div>
   );
 }

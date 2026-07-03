@@ -28,8 +28,15 @@ const orderSchema = new Schema(
     },
     createdAt: { type: Date, default: Date.now },
   },
-  { timestamps: true },
+  { timestamps: true }
 );
+
+// Merchant order management: filter by merchant + status, sorted by date
+orderSchema.index({ merchantId: 1, status: 1 });
+// Promoter earnings view: all orders attributed to a promoter by status
+orderSchema.index({ promoterId: 1, status: 1 });
+// Product-level order lookup
+orderSchema.index({ productId: 1 });
 
 export type OrderDocument = {
   productId: Types.ObjectId;

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { dbConnect } from "@/lib/dbConnect";
+import { signSession, COOKIE_NAME, SESSION_TTL_SECONDS } from "@/lib/session";
 import { Promoter, Merchant } from "@/models";
 import { verifyPassword } from "@/models/promoter";
 
@@ -29,7 +30,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    let user: any = null;
+    let user: {
+      _id: { toString(): string } | string;
+      email: string;
+      passwordHash?: string;
+      fullName?: string;
+      ownerName?: string;
+      role?: string;
+    } | null = null;
     let redirectTarget = "";
 
     // Role-based authentication
@@ -40,11 +48,25 @@ export async function POST(request: NextRequest) {
       user = await Merchant.findOne({ email: email.toLowerCase() }).lean();
       redirectTarget = "/merchant/dashboard";
     } else if (role === "admin") {
-      // Mock admin credentials (in production, use Admin model)
-      const ADMIN_EMAIL = process.env.ADMIN_EMAIL || "admin@inshirah.com";
-      const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "admin123";
+      // Admin credentials must come entirely from environment variables.
+      // No hardcoded fallback is allowed.
+      const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
+      const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 
-      if (email.toLowerCase() === ADMIN_EMAIL.toLowerCase() && password === ADMIN_PASSWORD) {
+      if (!ADMIN_EMAIL || !ADMIN_PASSWORD) {
+        console.error(
+          "ADMIN_EMAIL বা ADMIN_PASSWORD পরিবেশ ভেরিয়েবল সেট করা নেই।"
+        );
+        return NextResponse.json(
+          { error: "সার্ভার কনফিগারেশন সমস্যা। অ্যাডমিনের সাথে যোগাযোগ করুন।" },
+          { status: 500 }
+        );
+      }
+
+      if (
+        email.toLowerCase() === ADMIN_EMAIL.toLowerCase() &&
+        password === ADMIN_PASSWORD
+      ) {
         user = {
           _id: "admin-001",
           email: ADMIN_EMAIL,
@@ -54,10 +76,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Validation: Check if user exists and password matches
+    // Validation: Check if user exists
     if (!user) {
       return NextResponse.json(
-        { error: "দুঃখিত, আপনার প্রদানকৃত ইমেইল অথবা পাসওয়ার্ডটি সঠিক নয়।" },
+        { error: "দুঃখিত, আপনার প্রদানকৃত ইমেইল অথবা পাসওয়ার্ডটি সঠিক নয়।" },
         { status: 401 }
       );
     }
@@ -66,7 +88,7 @@ export async function POST(request: NextRequest) {
     if (role === "promoter" || role === "merchant") {
       if (!user.passwordHash) {
         return NextResponse.json(
-          { error: "দুঃখিত, আপনার প্রদানকৃত ইমেইল অথবা পাসওয়ার্ডটি সঠিক নয়।" },
+          { error: "দুঃখিত, আপনার প্রদানকৃত ইমেইল অথবা পাসওয়ার্ডটি সঠিক নয়।" },
           { status: 401 }
         );
       }
@@ -74,33 +96,39 @@ export async function POST(request: NextRequest) {
       const isPasswordValid = verifyPassword(password, user.passwordHash);
       if (!isPasswordValid) {
         return NextResponse.json(
-          { error: "দুঃখিত, আপনার প্রদানকৃত ইমেইল অথবা পাসওয়ার্ডটি সঠিক নয়।" },
+          { error: "দুঃখিত, আপনার প্রদানকৃত ইমেইল অথবা পাসওয়ার্ডটি সঠিক নয়।" },
           { status: 401 }
         );
       }
     }
 
-    // Session/Cookie Setup
-    const cookieStore = await cookies();
-    const sessionData = {
+    // Build session payload and sign it as a secure JWT
+    const sessionPayload = {
       userId: user._id.toString(),
       email: user.email,
-      role: role,
-      name: role === "promoter" ? user.fullName : role === "merchant" ? user.ownerName : "Admin",
+      role: role as "promoter" | "merchant" | "admin",
+      name:
+        role === "promoter"
+          ? (user.fullName ?? "")
+          : role === "merchant"
+          ? (user.ownerName ?? "")
+          : "Admin",
     };
 
-    cookieStore.set("inshirah_session", JSON.stringify(sessionData), {
+    const signedToken = await signSession(sessionPayload);
+
+    const cookieStore = await cookies();
+    cookieStore.set(COOKIE_NAME, signedToken, {
       httpOnly: true,
-      secure: true,
+      secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      maxAge: 7 * 24 * 60 * 60, // 7 days
+      maxAge: SESSION_TTL_SECONDS,
       path: "/",
     });
 
-    // Return successful response
     return NextResponse.json(
       {
-        message: "আলহামদুলিল্লাহ, আপনার লগ-ইন সফল হয়েছে!",
+        message: "আলহামদুলিল্লাহ, আপনার লগ-ইন সফল হয়েছে!",
         redirectTarget,
         user: {
           id: user._id.toString(),
@@ -113,7 +141,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Login error:", error);
     return NextResponse.json(
-      { error: "লগ-ইনে সমস্যা হয়েছে। পরে আবার চেষ্টা করুন।" },
+      { error: "লগ-ইনে সমস্যা হয়েছে। পরে আবার চেষ্টা করুন।" },
       { status: 500 }
     );
   }

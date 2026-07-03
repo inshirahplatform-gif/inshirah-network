@@ -9,6 +9,9 @@ const promoterSchema = new Schema(
     passwordHash: { type: String, required: true },
     agreedToShariah: { type: Boolean, required: true, default: false },
     role: { type: String, required: true, default: "promoter" },
+    totalEarned: { type: Number, required: true, default: 0 },
+    pendingBalance: { type: Number, required: true, default: 0 },
+    availableBalance: { type: Number, required: true, default: 0 },
   },
   { timestamps: true },
 );
@@ -20,6 +23,9 @@ export type PromoterDocument = {
   passwordHash: string;
   agreedToShariah: boolean;
   role: "promoter";
+  totalEarned: number;
+  pendingBalance: number;
+  availableBalance: number;
 };
 
 export const Promoter =

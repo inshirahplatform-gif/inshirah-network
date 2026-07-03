@@ -1,84 +1,62 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { verifySession } from "@/lib/session";
 
-interface SessionData {
-  userId: string;
-  email: string;
-  role: "promoter" | "merchant" | "admin";
-  name: string;
-}
-
-export function middleware(request: NextRequest) {
+export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Get session cookie
-  const sessionCookie = request.cookies.get("inshirah_session");
-
-  // Protected paths
+  // Protected path flags
   const isPromoterPath = pathname.startsWith("/promoter");
   const isMerchantPath = pathname.startsWith("/merchant");
   const isAdminPath = pathname.startsWith("/admin");
 
-  // If trying to access protected routes without session, redirect to login
+  const sessionCookie = request.cookies.get("inshirah_session");
+
+  // No cookie at all → redirect to login for protected routes
   if ((isPromoterPath || isMerchantPath || isAdminPath) && !sessionCookie) {
-    const loginUrl = new URL("/login", request.url);
-    return NextResponse.redirect(loginUrl);
+    return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  // If session exists, parse and validate role
   if (sessionCookie) {
-    try {
-      const sessionData: SessionData = JSON.parse(sessionCookie.value);
-      const userRole = sessionData.role;
+    // Verify the JWT signature.  verifySession returns null on any tamper/expiry.
+    const session = await verifySession(sessionCookie.value);
 
-      // Role-based authorization
-      if (isPromoterPath && userRole !== "promoter") {
-        // Non-promoter trying to access promoter routes
-        if (userRole === "merchant") {
-          const dashboardUrl = new URL("/merchant/dashboard", request.url);
-          return NextResponse.redirect(dashboardUrl);
-        } else if (userRole === "admin") {
-          // Admin can access all routes, allow access
-          return NextResponse.next();
-        }
-      }
+    if (!session) {
+      // Forged, expired, or corrupted cookie — clear it and redirect to login
+      const response = NextResponse.redirect(new URL("/login", request.url));
+      response.cookies.delete("inshirah_session");
+      return response;
+    }
 
-      if (isMerchantPath && userRole !== "merchant") {
-        // Non-merchant trying to access merchant routes
-        if (userRole === "promoter") {
-          const dashboardUrl = new URL("/promoter/dashboard", request.url);
-          return NextResponse.redirect(dashboardUrl);
-        } else if (userRole === "admin") {
-          // Admin can access all routes, allow access
-          return NextResponse.next();
-        }
-      }
+    const { role } = session;
 
-      if (isAdminPath && userRole !== "admin") {
-        // Non-admin trying to access admin routes
-        if (userRole === "promoter") {
-          const dashboardUrl = new URL("/promoter/dashboard", request.url);
-          return NextResponse.redirect(dashboardUrl);
-        } else if (userRole === "merchant") {
-          const dashboardUrl = new URL("/merchant/dashboard", request.url);
-          return NextResponse.redirect(dashboardUrl);
-        }
-      }
-    } catch (error) {
-      // Invalid session cookie, redirect to login
-      const loginUrl = new URL("/login", request.url);
-      return NextResponse.redirect(loginUrl);
+    // Role-based access control
+    if (isPromoterPath && role !== "promoter") {
+      if (role === "admin") return NextResponse.next();
+      const target = role === "merchant" ? "/merchant/dashboard" : "/login";
+      return NextResponse.redirect(new URL(target, request.url));
+    }
+
+    if (isMerchantPath && role !== "merchant") {
+      if (role === "admin") return NextResponse.next();
+      const target = role === "promoter" ? "/promoter/dashboard" : "/login";
+      return NextResponse.redirect(new URL(target, request.url));
+    }
+
+    if (isAdminPath && role !== "admin") {
+      const target =
+        role === "promoter"
+          ? "/promoter/dashboard"
+          : role === "merchant"
+          ? "/merchant/dashboard"
+          : "/login";
+      return NextResponse.redirect(new URL(target, request.url));
     }
   }
 
-  // Allow access to public routes
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: [
-    "/promoter/:path*",
-    "/merchant/:path*",
-    "/admin/:path*",
-  ],
+  matcher: ["/promoter/:path*", "/merchant/:path*", "/admin/:path*"],
 };
