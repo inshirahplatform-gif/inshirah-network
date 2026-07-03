@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useCallback } from "react";
+import Image from "next/image";
 import { Noto_Sans_Bengali } from "next/font/google";
 
 const notoSansBengali = Noto_Sans_Bengali({
@@ -8,93 +9,169 @@ const notoSansBengali = Noto_Sans_Bengali({
   weight: ["400", "500", "600", "700"],
 });
 
+// ── Types ─────────────────────────────────────────────────────────────────────
+type ImageMode = "file" | "url";
 type Banner = { type: "success" | "error"; text: string } | null;
 
+// ── Alert banner ──────────────────────────────────────────────────────────────
 function AlertBanner({ banner }: { banner: Banner }) {
   if (!banner) return null;
   const styles =
     banner.type === "success"
-      ? "border-emerald-700/50 bg-emerald-950/40 text-emerald-300"
-      : "border-red-700/50 bg-red-950/40 text-red-300";
-  const icon = banner.type === "success" ? "✓" : "✕";
+      ? "border-emerald-300 bg-emerald-50 text-emerald-800 dark:border-emerald-700/50 dark:bg-emerald-950/40 dark:text-emerald-300"
+      : "border-red-300 bg-red-50 text-red-800 dark:border-red-700/50 dark:bg-red-950/40 dark:text-red-300";
   return (
     <div
       role="alert"
       className={`flex items-start gap-3 rounded-xl border px-4 py-3 text-sm font-medium ${styles}`}
     >
-      <span className="mt-0.5 shrink-0 text-base leading-none">{icon}</span>
+      <span className="mt-0.5 shrink-0">{banner.type === "success" ? "✓" : "✕"}</span>
       <span>{banner.text}</span>
     </div>
   );
 }
 
-export default function ProductUploadPage() {
-  const [formData, setFormData] = useState({
-    title: "",
-    description: "",
-    price: "",
-    commissionPercentage: "",
-    stockQuantity: "",
+// ── Helper: read File → base64 data URI ───────────────────────────────────────
+function readFileAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload  = () => resolve(reader.result as string);
+    reader.onerror = () => reject(new Error("ফাইল পড়তে সমস্যা হয়েছে"));
+    reader.readAsDataURL(file);
   });
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [isLoading, setIsLoading] = useState(false);
-  const [banner, setBanner] = useState<Banner>(null);
+}
 
-  const validateForm = () => {
-    const newErrors: Record<string, string> = {};
-    if (!formData.title.trim()) newErrors.title = "প্রোডাক্টের নাম আবশ্যক";
-    if (!formData.description.trim()) newErrors.description = "প্রোডাক্টের বিবরণ আবশ্যক";
-    if (!formData.price.trim()) {
-      newErrors.price = "মূল্য আবশ্যক";
-    } else if (isNaN(Number(formData.price)) || Number(formData.price) <= 0) {
-      newErrors.price = "সঠিক মূল্য দিন";
+// ── Page ──────────────────────────────────────────────────────────────────────
+export default function ProductUploadPage() {
+  // form fields
+  const [title,                setTitle]                = useState("");
+  const [description,          setDescription]          = useState("");
+  const [price,                setPrice]                = useState("");
+  const [commissionPercentage, setCommissionPercentage] = useState("");
+  const [stockQuantity,        setStockQuantity]        = useState("");
+
+  // image state
+  const [imageMode,    setImageMode]    = useState<ImageMode>("file");
+  const [imageFile,    setImageFile]    = useState<string>(""); // base64 data URI
+  const [imageUrlInput, setImageUrlInput] = useState("");
+  const [imagePreview, setImagePreview] = useState("");   // shown in <img>
+  const [isDragging,   setIsDragging]   = useState(false);
+
+  // form meta
+  const [errors,    setErrors]    = useState<Record<string, string>>({});
+  const [isLoading, setIsLoading] = useState(false);
+  const [banner,    setBanner]    = useState<Banner>(null);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // ── Image file handler ─────────────────────────────────────────────────────
+  const handleFileSelect = useCallback(async (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      setErrors((p) => ({ ...p, image: "শুধুমাত্র ইমেজ ফাইল গ্রহণযোগ্য (JPG, PNG, WEBP)" }));
+      return;
     }
-    if (!formData.commissionPercentage.trim()) {
-      newErrors.commissionPercentage = "কমিশন আবশ্যক";
-    } else if (
-      isNaN(Number(formData.commissionPercentage)) ||
-      Number(formData.commissionPercentage) <= 0 ||
-      Number(formData.commissionPercentage) > 100
-    ) {
-      newErrors.commissionPercentage = "কমিশন ০-১০০% এর মধ্যে হতে হবে";
+    if (file.size > 5 * 1024 * 1024) {
+      setErrors((p) => ({ ...p, image: "ফাইলের আকার সর্বোচ্চ ৫ MB হতে হবে" }));
+      return;
     }
-    if (!formData.stockQuantity.trim()) {
-      newErrors.stockQuantity = "স্টক সংখ্যা আবশ্যক";
-    } else if (
-      isNaN(Number(formData.stockQuantity)) ||
-      Number(formData.stockQuantity) < 1 ||
-      !Number.isInteger(Number(formData.stockQuantity))
-    ) {
-      newErrors.stockQuantity = "সঠিক স্টক সংখ্যা দিন (ন্যূনতম ১, পূর্ণসংখ্যা)";
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      setImageFile(dataUrl);
+      setImagePreview(dataUrl);
+      setErrors((p) => { const n = { ...p }; delete n.image; return n; });
+    } catch {
+      setErrors((p) => ({ ...p, image: "ফাইল প্রক্রিয়াকরণে সমস্যা হয়েছে" }));
     }
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+  }, []);
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      setIsDragging(false);
+      const file = e.dataTransfer.files[0];
+      if (file) handleFileSelect(file);
+    },
+    [handleFileSelect]
+  );
+
+  // ── URL input handler ──────────────────────────────────────────────────────
+  const handleUrlChange = (val: string) => {
+    setImageUrlInput(val);
+    setErrors((p) => { const n = { ...p }; delete n.image; return n; });
+    // Show preview immediately for valid-looking URLs
+    if (val.trim().startsWith("http")) setImagePreview(val.trim());
+    else setImagePreview("");
   };
 
+  // Switch mode — clear image state
+  const switchMode = (mode: ImageMode) => {
+    setImageMode(mode);
+    setImageFile("");
+    setImageUrlInput("");
+    setImagePreview("");
+    setErrors((p) => { const n = { ...p }; delete n.image; return n; });
+  };
+
+  // ── Validation ─────────────────────────────────────────────────────────────
+  const validate = () => {
+    const e: Record<string, string> = {};
+    if (!title.trim()) e.title = "প্রোডাক্টের নাম আবশ্যক";
+    if (!description.trim()) e.description = "প্রোডাক্টের বিবরণ আবশ্যক";
+    if (!price.trim() || isNaN(Number(price)) || Number(price) <= 0)
+      e.price = "সঠিক মূল্য দিন";
+    if (
+      !commissionPercentage.trim() ||
+      isNaN(Number(commissionPercentage)) ||
+      Number(commissionPercentage) <= 0 ||
+      Number(commissionPercentage) > 100
+    )
+      e.commissionPercentage = "কমিশন ০–১০০% এর মধ্যে হতে হবে";
+    if (
+      !stockQuantity.trim() ||
+      isNaN(Number(stockQuantity)) ||
+      Number(stockQuantity) < 1 ||
+      !Number.isInteger(Number(stockQuantity))
+    )
+      e.stockQuantity = "ন্যূনতম ১ পিস পূর্ণসংখ্যা হতে হবে";
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  // ── Submit ─────────────────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBanner(null);
-    if (!validateForm()) return;
+    if (!validate()) return;
 
     setIsLoading(true);
     try {
-      // merchantId is extracted server-side from the session cookie
+      const payload: Record<string, unknown> = {
+        title: title.trim(),
+        description: description.trim(),
+        price: Number(price),
+        commissionPercentage: Number(commissionPercentage),
+        stockQuantity: Number(stockQuantity),
+      };
+
+      if (imageMode === "file" && imageFile) {
+        payload.imageFile = imageFile;
+      } else if (imageMode === "url" && imageUrlInput.trim().startsWith("http")) {
+        payload.imageUrl = imageUrlInput.trim();
+      }
+
       const res = await fetch("/api/merchant/products", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          title: formData.title.trim(),
-          description: formData.description.trim(),
-          price: Number(formData.price),
-          commissionPercentage: Number(formData.commissionPercentage),
-          stockQuantity: Number(formData.stockQuantity),
-        }),
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
 
       if (res.ok) {
         setBanner({ type: "success", text: data.message ?? "প্রোডাক্ট সফলভাবে লাইভ হয়েছে!" });
-        setFormData({ title: "", description: "", price: "", commissionPercentage: "", stockQuantity: "" });
+        // Reset everything
+        setTitle(""); setDescription(""); setPrice("");
+        setCommissionPercentage(""); setStockQuantity("");
+        setImageFile(""); setImageUrlInput(""); setImagePreview("");
         setErrors({});
       } else {
         setBanner({ type: "error", text: data.error ?? "প্রোডাক্ট আপলোডে সমস্যা হয়েছে" });
@@ -106,26 +183,21 @@ export default function ProductUploadPage() {
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
-    setBanner(null);
-    if (errors[name]) {
-      setErrors((prev) => { const n = { ...prev }; delete n[name]; return n; });
-    }
-  };
-
+  // ── Shared styles ──────────────────────────────────────────────────────────
   const inputBase =
-    "w-full rounded-xl border bg-zinc-950 px-4 py-3 text-sm text-zinc-50 outline-none transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50";
-  const inputOk = "border-zinc-800 focus-visible:border-emerald-700 focus-visible:outline-emerald-500";
-  const inputErr = "border-red-500/50 focus-visible:outline-red-500";
+    "w-full rounded-xl border bg-white px-4 py-3 text-sm text-zinc-950 outline-none transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-zinc-900 dark:text-zinc-50";
+  const inputOk  = "border-zinc-300 focus-visible:border-emerald-500 focus-visible:outline-emerald-500 dark:border-zinc-700";
+  const inputErr = "border-red-400 focus-visible:outline-red-500 dark:border-red-500/50";
 
   return (
     <div className={`${notoSansBengali.className} space-y-8`}>
+      {/* Header */}
       <section>
-        <p className="text-sm font-semibold text-emerald-400">মার্চেন্ট প্যানেল</p>
-        <h2 className="mt-2 text-3xl font-bold tracking-tight text-zinc-50">নতুন প্রোডাক্ট যুক্ত করুন</h2>
-        <p className="mt-3 max-w-2xl text-sm leading-7 text-zinc-400">
+        <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">মার্চেন্ট প্যানেল</p>
+        <h2 className="mt-2 text-3xl font-bold tracking-tight text-zinc-950 dark:text-zinc-50">
+          নতুন প্রোডাক্ট যুক্ত করুন
+        </h2>
+        <p className="mt-3 max-w-2xl text-sm leading-7 text-zinc-500 dark:text-zinc-400">
           আপনার হালাল প্রোডাক্টের তথ্য দিয়ে মার্কেটপ্লেসে যুক্ত করুন।
         </p>
       </section>
@@ -133,96 +205,177 @@ export default function ProductUploadPage() {
       <section className="max-w-2xl">
         <form onSubmit={handleSubmit} className="space-y-6" noValidate>
 
-          {/* Title */}
+          {/* ── Title ── */}
           <div className="space-y-2">
-            <label htmlFor="title" className="block text-sm font-medium text-zinc-300">
-              প্রোডাক্টের নাম <span className="text-red-400">*</span>
+            <label htmlFor="title" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              প্রোডাক্টের নাম <span className="text-red-500">*</span>
             </label>
-            <input
-              type="text" id="title" name="title"
-              value={formData.title} onChange={handleChange}
+            <input type="text" id="title" value={title}
+              onChange={(e) => { setTitle(e.target.value); setBanner(null); setErrors((p) => { const n={...p}; delete n.title; return n; }); }}
               placeholder="প্রোডাক্টের নাম লিখুন" disabled={isLoading}
-              className={`${inputBase} ${errors.title ? inputErr : inputOk}`}
-            />
-            {errors.title && <p className="text-sm text-red-400">{errors.title}</p>}
+              className={`${inputBase} ${errors.title ? inputErr : inputOk}`} />
+            {errors.title && <p className="text-sm text-red-500">{errors.title}</p>}
           </div>
 
-          {/* Description */}
+          {/* ── Description ── */}
           <div className="space-y-2">
-            <label htmlFor="description" className="block text-sm font-medium text-zinc-300">
-              প্রোডাক্টের বিবরণ <span className="text-red-400">*</span>
+            <label htmlFor="description" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              প্রোডাক্টের বিবরণ <span className="text-red-500">*</span>
             </label>
-            <textarea
-              id="description" name="description"
-              value={formData.description} onChange={handleChange}
-              placeholder="প্রোডাক্টের বিস্তারিত বিবরণ লিখুন"
-              rows={4} disabled={isLoading}
-              className={`${inputBase} resize-none ${errors.description ? inputErr : inputOk}`}
-            />
-            {errors.description && <p className="text-sm text-red-400">{errors.description}</p>}
+            <textarea id="description" value={description} rows={4}
+              onChange={(e) => { setDescription(e.target.value); setBanner(null); setErrors((p) => { const n={...p}; delete n.description; return n; }); }}
+              placeholder="প্রোডাক্টের বিস্তারিত বিবরণ লিখুন" disabled={isLoading}
+              className={`${inputBase} resize-none ${errors.description ? inputErr : inputOk}`} />
+            {errors.description && <p className="text-sm text-red-500">{errors.description}</p>}
           </div>
 
-          {/* Price */}
-          <div className="space-y-2">
-            <label htmlFor="price" className="block text-sm font-medium text-zinc-300">
-              মূল্য (৳) <span className="text-red-400">*</span>
-            </label>
-            <input
-              type="number" id="price" name="price"
-              value={formData.price} onChange={handleChange}
-              placeholder="মূল্য টাকায় লিখুন" min="0" step="0.01" disabled={isLoading}
-              className={`${inputBase} ${errors.price ? inputErr : inputOk}`}
-            />
-            {errors.price && <p className="text-sm text-red-400">{errors.price}</p>}
+          {/* ── Price + Commission row ── */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <label htmlFor="price" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                মূল্য (৳) <span className="text-red-500">*</span>
+              </label>
+              <input type="number" id="price" value={price} min="0" step="0.01"
+                onChange={(e) => { setPrice(e.target.value); setBanner(null); setErrors((p) => { const n={...p}; delete n.price; return n; }); }}
+                placeholder="মূল্য টাকায়" disabled={isLoading}
+                className={`${inputBase} ${errors.price ? inputErr : inputOk}`} />
+              {errors.price && <p className="text-sm text-red-500">{errors.price}</p>}
+            </div>
+            <div className="space-y-2">
+              <label htmlFor="commission" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                প্রোমোটার কমিশন (%) <span className="text-red-500">*</span>
+              </label>
+              <input type="number" id="commission" value={commissionPercentage} min="0" max="100" step="0.1"
+                onChange={(e) => { setCommissionPercentage(e.target.value); setBanner(null); setErrors((p) => { const n={...p}; delete n.commissionPercentage; return n; }); }}
+                placeholder="যেমন: ১০" disabled={isLoading}
+                className={`${inputBase} ${errors.commissionPercentage ? inputErr : inputOk}`} />
+              {errors.commissionPercentage && <p className="text-sm text-red-500">{errors.commissionPercentage}</p>}
+            </div>
           </div>
 
-          {/* Commission */}
+          {/* ── Stock ── */}
           <div className="space-y-2">
-            <label htmlFor="commissionPercentage" className="block text-sm font-medium text-zinc-300">
-              প্রোমোটার কমিশন (%) <span className="text-red-400">*</span>
+            <label htmlFor="stock" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              ফিজিক্যাল স্টক (পিস) <span className="text-red-500">*</span>
             </label>
-            <input
-              type="number" id="commissionPercentage" name="commissionPercentage"
-              value={formData.commissionPercentage} onChange={handleChange}
-              placeholder="কমিশন শতাংশে লিখুন (যেমন: ৫, ১০)" min="0" max="100" step="0.1" disabled={isLoading}
-              className={`${inputBase} ${errors.commissionPercentage ? inputErr : inputOk}`}
-            />
-            {errors.commissionPercentage && <p className="text-sm text-red-400">{errors.commissionPercentage}</p>}
-          </div>
+            <input type="number" id="stock" value={stockQuantity} min="1" step="1"
+              onChange={(e) => { setStockQuantity(e.target.value); setBanner(null); setErrors((p) => { const n={...p}; delete n.stockQuantity; return n; }); }}
+              placeholder="আপনার কাছে থাকা পিস" disabled={isLoading}
+              className={`${inputBase} ${errors.stockQuantity ? inputErr : inputOk}`} />
+            {errors.stockQuantity && <p className="text-sm text-red-500">{errors.stockQuantity}</p>}
 
-          {/* Stock */}
-          <div className="space-y-2">
-            <label htmlFor="stockQuantity" className="block text-sm font-medium text-zinc-300">
-              ফিজিক্যাল স্টক সংখ্যা (পিস) <span className="text-red-400">*</span>
-            </label>
-            <input
-              type="number" id="stockQuantity" name="stockQuantity"
-              value={formData.stockQuantity} onChange={handleChange}
-              placeholder="আপনার কাছে থাকা স্টকের সংখ্যা" min="1" step="1" disabled={isLoading}
-              className={`${inputBase} ${errors.stockQuantity ? inputErr : inputOk}`}
-            />
-            {errors.stockQuantity && <p className="text-sm text-red-400">{errors.stockQuantity}</p>}
-
-            {/* Shariah warning */}
-            <div className="mt-3 rounded-lg border border-amber-900/50 bg-amber-950/20 p-4">
-              <p className="flex items-start gap-2 text-sm font-medium text-amber-400">
-                <svg className="mt-0.5 h-5 w-5 shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                </svg>
-                <span>
-                  শতর্কতা: শারীয়াহ নীতিমালা অনুযায়ী আপনার ফিজিক্যাল স্টকে বা সরাসরি মালিকানায় নেই এমন পণ্য
-                  লিস্টিং করা সম্পূর্ণ নিষিদ্ধ। স্টক ০ হওয়া মাত্রই প্রোডাক্টটি স্বয়ংক্রিয়ভাবে হাইড হয়ে যাবে।
-                </span>
+            {/* Shariah reminder */}
+            <div className="mt-2 flex items-start gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 dark:border-amber-800/40 dark:bg-amber-950/20">
+              <svg className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd"/>
+              </svg>
+              <p className="text-xs leading-5 text-amber-700 dark:text-amber-400">
+                শারীয়াহ নীতিমালা অনুযায়ী শুধুমাত্র ফিজিক্যাল স্টকে থাকা পণ্য লিস্টিং করুন। স্টক ০ হলে পণ্য স্বয়ংক্রিয়ভাবে হাইড হবে।
               </p>
             </div>
           </div>
 
-          {/* Inline notification */}
+          {/* ── Image section ── */}
+          <div className="space-y-3">
+            <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              পণ্যের ছবি <span className="text-xs font-normal text-zinc-400">(ঐচ্ছিক)</span>
+            </p>
+
+            {/* Mode toggle */}
+            <div className="flex gap-1 rounded-xl border border-zinc-200 bg-zinc-100 p-1 dark:border-zinc-800 dark:bg-zinc-900">
+              {(["file", "url"] as ImageMode[]).map((mode) => (
+                <button key={mode} type="button"
+                  onClick={() => switchMode(mode)} disabled={isLoading}
+                  className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+                    imageMode === mode
+                      ? "bg-emerald-700 text-white shadow-sm"
+                      : "text-zinc-500 hover:bg-zinc-200 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50"
+                  }`}
+                >
+                  {mode === "file" ? (
+                    <><svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" /></svg>ফাইল আপলোড করুন</>
+                  ) : (
+                    <><svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" /></svg>ইমেজ লিংক দিন</>
+                  )}
+                </button>
+              ))}
+            </div>
+
+            {/* File upload mode */}
+            {imageMode === "file" && (
+              <div
+                onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                onDragLeave={() => setIsDragging(false)}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+                className={`relative flex min-h-[160px] cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed transition-colors ${
+                  isDragging
+                    ? "border-emerald-500 bg-emerald-50 dark:border-emerald-600 dark:bg-emerald-950/20"
+                    : errors.image
+                    ? "border-red-400 bg-red-50/50 dark:border-red-600/50 dark:bg-red-950/10"
+                    : "border-zinc-300 bg-zinc-50 hover:border-emerald-400 hover:bg-emerald-50/40 dark:border-zinc-700 dark:bg-zinc-900/60 dark:hover:border-emerald-600 dark:hover:bg-emerald-950/10"
+                }`}
+              >
+                <input
+                  ref={fileInputRef} type="file" accept="image/*" className="sr-only"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handleFileSelect(f); }}
+                  disabled={isLoading}
+                />
+                {imagePreview ? (
+                  <div className="relative h-36 w-full overflow-hidden rounded-xl">
+                    <Image src={imagePreview} alt="Preview" fill className="object-contain" unoptimized />
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 transition-opacity hover:opacity-100">
+                      <span className="rounded-lg bg-white/90 px-3 py-1 text-xs font-semibold text-zinc-900">পরিবর্তন করুন</span>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-zinc-200 dark:bg-zinc-800">
+                      <svg className="h-6 w-6 text-zinc-500 dark:text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                      </svg>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                        ড্র্যাগ করুন বা ক্লিক করে ফাইল বেছে নিন
+                      </p>
+                      <p className="mt-1 text-xs text-zinc-400">JPG, PNG, WEBP — সর্বোচ্চ ৫ MB</p>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* URL mode */}
+            {imageMode === "url" && (
+              <div className="space-y-3">
+                <input
+                  type="url" value={imageUrlInput}
+                  onChange={(e) => handleUrlChange(e.target.value)}
+                  placeholder="https://example.com/image.jpg"
+                  disabled={isLoading}
+                  className={`${inputBase} ${errors.image ? inputErr : inputOk}`}
+                />
+                {imagePreview && (
+                  <div className="relative h-48 w-full overflow-hidden rounded-2xl border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={imagePreview} alt="URL preview"
+                      className="h-full w-full object-contain"
+                      onError={() => setImagePreview("")}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {errors.image && <p className="text-sm text-red-500">{errors.image}</p>}
+          </div>
+
+          {/* ── Banner + Submit ── */}
           <AlertBanner banner={banner} />
 
-          {/* Submit */}
-          <button
-            type="submit" disabled={isLoading}
+          <button type="submit" disabled={isLoading}
             className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-emerald-700 px-6 text-sm font-semibold text-white transition-colors hover:bg-emerald-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {isLoading ? (
@@ -233,9 +386,7 @@ export default function ProductUploadPage() {
                 </svg>
                 আপলোড হচ্ছে…
               </>
-            ) : (
-              "প্রোডাক্ট লাইভ করুন"
-            )}
+            ) : "প্রোডাক্ট লাইভ করুন"}
           </button>
         </form>
       </section>
