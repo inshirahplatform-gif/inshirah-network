@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Noto_Sans_Bengali } from "next/font/google";
 import { FormEvent, useEffect, useId, useState } from "react";
+import { useRouter } from "next/navigation";
 
 const notoSansBengali = Noto_Sans_Bengali({
   subsets: ["bengali"],
@@ -94,6 +95,7 @@ function validateForm(values: FormValues): FormErrors {
 }
 
 export default function PromoterRegisterPage() {
+  const router = useRouter();
   const agreementId = useId();
   const [values, setValues] = useState<FormValues>({
     fullName: "",
@@ -169,6 +171,8 @@ export default function PromoterRegisterPage() {
         agreedToShariah: false,
       });
       setShowPolicy(false);
+      // Redirect to login after a short delay so the user sees the success message
+      setTimeout(() => router.push("/login"), 1500);
     } catch (error) {
       setSubmitMessage({
         type: "error",

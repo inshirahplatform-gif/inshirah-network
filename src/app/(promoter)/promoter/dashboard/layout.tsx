@@ -1,13 +1,30 @@
-export default function PromoterDashboardLayout({
-  children,
-}: Readonly<{
-  children: React.ReactNode;
-}>) {
+import Link from "next/link";
+import { Noto_Sans_Bengali } from "next/font/google";
+import { ThemeToggle } from "@/components/shared/ThemeToggle";
+
+const notoSansBengali = Noto_Sans_Bengali({ subsets: ["bengali"], weight: ["400", "500", "600", "700"] });
+
+export default function PromoterDashboardLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <div className="min-h-full bg-zinc-950 text-zinc-50">
-      <header className="border-b border-zinc-800 bg-zinc-900 px-6 py-4">
-        <p className="text-sm font-medium text-zinc-500">প্রমোটার প্যানেল</p>
-        <h1 className="text-lg font-semibold text-zinc-50">ড্যাশবোর্ড</h1>
+    <div className={`${notoSansBengali.className} min-h-screen bg-white dark:bg-zinc-950`}>
+      <header className="sticky top-0 z-10 border-b border-zinc-200 bg-white/90 backdrop-blur-sm dark:border-zinc-800 dark:bg-zinc-900/90">
+        <div className="mx-auto flex w-full max-w-6xl items-center justify-between px-6 py-4">
+          <div>
+            <p className="text-xs font-medium text-zinc-400 dark:text-zinc-500">প্রমোটার প্যানেল</p>
+            <p className="mt-0.5 text-sm font-semibold text-zinc-950 dark:text-zinc-50">ড্যাশবোর্ড</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <nav className="flex items-center gap-1">
+              <Link href="/promoter/dashboard" className="rounded-lg px-3 py-2 text-sm font-medium text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50">
+                ড্যাশবোর্ড
+              </Link>
+              <Link href="/promoter/marketplace" className="rounded-lg px-3 py-2 text-sm font-medium text-zinc-500 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50">
+                মার্কেটপ্লেস
+              </Link>
+            </nav>
+            <ThemeToggle />
+          </div>
+        </div>
       </header>
       <div className="mx-auto w-full max-w-6xl px-6 py-8">{children}</div>
     </div>

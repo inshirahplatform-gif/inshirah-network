@@ -1,8 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
-  reactCompiler: true,
+  // reactCompiler conflicts with Turbopack on Windows — disabled
 };
 
 export default nextConfig;
