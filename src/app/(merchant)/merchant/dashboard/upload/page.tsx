@@ -56,6 +56,12 @@ export default function ProductUploadPage() {
   const [imageUrlInput, setImageUrlInput] = useState("");
   const [imagePreview, setImagePreview] = useState("");   // shown in <img>
   const [isDragging,   setIsDragging]   = useState(false);
+  
+  // gallery images state
+  const [galleryMode,  setGalleryMode]  = useState<ImageMode>("file");
+  const [galleryFiles, setGalleryFiles] = useState<string[]>([]); // base64 data URIs
+  const [galleryUrlInput, setGalleryUrlInput] = useState("");
+  const [galleryPreviews, setGalleryPreviews] = useState<string[]>([]);
 
   // form meta
   const [errors,    setErrors]    = useState<Record<string, string>>({});
@@ -63,6 +69,50 @@ export default function ProductUploadPage() {
   const [banner,    setBanner]    = useState<Banner>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const galleryFileInputRef = useRef<HTMLInputElement>(null);
+
+  // ── Gallery file handler ─────────────────────────────────────────────────────
+  const handleGalleryFileSelect = useCallback(async (file: File) => {
+    if (!file.type.startsWith("image/")) {
+      setErrors((p) => ({ ...p, gallery: "শুধুমাত্র ইমেজ ফাইল গ্রহণযোগ্য (JPG, PNG, WEBP)" }));
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setErrors((p) => ({ ...p, gallery: "ফাইলের আকার সর্বোচ্চ ৫ MB হতে হবে" }));
+      return;
+    }
+    if (galleryFiles.length >= 5) {
+      setErrors((p) => ({ ...p, gallery: "সর্বোচ্চ ৫টি গ্যালারি ইমেজ যোগ করতে পারবেন" }));
+      return;
+    }
+    try {
+      const dataUrl = await readFileAsDataUrl(file);
+      setGalleryFiles((prev) => [...prev, dataUrl]);
+      setGalleryPreviews((prev) => [...prev, dataUrl]);
+      setErrors((p) => { const n = { ...p }; delete n.gallery; return n; });
+    } catch {
+      setErrors((p) => ({ ...p, gallery: "ফাইল প্রক্রিয়াকরণে সমস্যা হয়েছে" }));
+    }
+  }, [galleryFiles.length]);
+
+  const handleGalleryUrlAdd = () => {
+    if (!galleryUrlInput.trim().startsWith("http")) {
+      setErrors((p) => ({ ...p, gallery: "সঠিক URL দিন" }));
+      return;
+    }
+    if (galleryPreviews.length >= 5) {
+      setErrors((p) => ({ ...p, gallery: "সর্বোচ্চ ৫টি গ্যালারি ইমেজ যোগ করতে পারবেন" }));
+      return;
+    }
+    setGalleryPreviews((prev) => [...prev, galleryUrlInput.trim()]);
+    setGalleryUrlInput("");
+    setErrors((p) => { const n = { ...p }; delete n.gallery; return n; });
+  };
+
+  const handleGalleryRemove = (index: number) => {
+    setGalleryFiles((prev) => prev.filter((_, i) => i !== index));
+    setGalleryPreviews((prev) => prev.filter((_, i) => i !== index));
+  };
 
   // ── Image file handler ─────────────────────────────────────────────────────
   const handleFileSelect = useCallback(async (file: File) => {
@@ -159,6 +209,15 @@ export default function ProductUploadPage() {
         payload.imageUrl = imageUrlInput.trim();
       }
 
+      // Add gallery images
+      if (galleryFiles.length > 0) {
+        payload.galleryFiles = galleryFiles;
+      }
+      if (galleryPreviews.length > galleryFiles.length) {
+        // URL-based gallery images
+        payload.galleryUrls = galleryPreviews.slice(galleryFiles.length);
+      }
+
       const res = await fetch("/api/merchant/products", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -172,6 +231,7 @@ export default function ProductUploadPage() {
         setTitle(""); setDescription(""); setPrice("");
         setCommissionPercentage(""); setStockQuantity("");
         setImageFile(""); setImageUrlInput(""); setImagePreview("");
+        setGalleryFiles([]); setGalleryUrlInput(""); setGalleryPreviews([]);
         setErrors({});
       } else {
         setBanner({ type: "error", text: data.error ?? "প্রোডাক্ট আপলোডে সমস্যা হয়েছে" });
@@ -370,6 +430,103 @@ export default function ProductUploadPage() {
             )}
 
             {errors.image && <p className="text-sm text-red-500">{errors.image}</p>}
+          </div>
+
+          {/* ── Gallery Images section ── */}
+          <div className="space-y-3">
+            <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              গ্যালারি ইমেজ <span className="text-xs font-normal text-zinc-400">(ঐচ্ছিক, সর্বোচ্চ ৫টি)</span>
+            </p>
+
+            {/* Gallery mode toggle */}
+            <div className="flex gap-1 rounded-xl border border-zinc-200 bg-zinc-100 p-1 dark:border-zinc-800 dark:bg-zinc-900">
+              {(["file", "url"] as ImageMode[]).map((mode) => (
+                <button key={mode} type="button"
+                  onClick={() => { setGalleryMode(mode); setGalleryUrlInput(""); }}
+                  disabled={isLoading}
+                  className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+                    galleryMode === mode
+                      ? "bg-emerald-700 text-white shadow-sm"
+                      : "text-zinc-500 hover:bg-zinc-200 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-50"
+                  }`}
+                >
+                  {mode === "file" ? "ফাইল আপলোড" : "ইমেজ লিংক"}
+                </button>
+              ))}
+            </div>
+
+            {/* Gallery file upload */}
+            {galleryMode === "file" && (
+              <div
+                onClick={() => galleryFileInputRef.current?.click()}
+                className={`relative flex min-h-[100px] cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed transition-colors ${
+                  errors.gallery
+                    ? "border-red-400 bg-red-50/50 dark:border-red-600/50 dark:bg-red-950/10"
+                    : "border-zinc-300 bg-zinc-50 hover:border-emerald-400 hover:bg-emerald-50/40 dark:border-zinc-700 dark:bg-zinc-900/60 dark:hover:border-emerald-600 dark:hover:bg-emerald-950/10"
+                }`}
+              >
+                <input
+                  ref={galleryFileInputRef} type="file" accept="image/*" className="sr-only"
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handleGalleryFileSelect(f); }}
+                  disabled={isLoading}
+                />
+                <div className="text-center">
+                  <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    ক্লিক করে গ্যালারি ইমেজ যোগ করুন
+                  </p>
+                  <p className="mt-1 text-xs text-zinc-400">JPG, PNG, WEBP — সর্বোচ্চ ৫ MB</p>
+                </div>
+              </div>
+            )}
+
+            {/* Gallery URL input */}
+            {galleryMode === "url" && (
+              <div className="flex gap-2">
+                <input
+                  type="url" value={galleryUrlInput}
+                  onChange={(e) => setGalleryUrlInput(e.target.value)}
+                  placeholder="https://example.com/image.jpg"
+                  disabled={isLoading}
+                  className={`${inputBase} flex-1 ${errors.gallery ? inputErr : inputOk}`}
+                />
+                <button
+                  type="button"
+                  onClick={handleGalleryUrlAdd}
+                  disabled={isLoading || !galleryUrlInput.trim()}
+                  className="rounded-xl bg-emerald-700 px-4 py-3 text-sm font-semibold text-white transition-colors hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  যোগ করুন
+                </button>
+              </div>
+            )}
+
+            {/* Gallery previews */}
+            {galleryPreviews.length > 0 && (
+              <div className="grid grid-cols-5 gap-2">
+                {galleryPreviews.map((preview, index) => (
+                  <div key={index} className="relative aspect-square overflow-hidden rounded-lg border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900">
+                    <Image
+                      src={preview}
+                      alt={`Gallery ${index + 1}`}
+                      fill
+                      className="object-cover"
+                      unoptimized
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleGalleryRemove(index)}
+                      className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-600 text-white transition-colors hover:bg-red-700"
+                    >
+                      <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {errors.gallery && <p className="text-sm text-red-500">{errors.gallery}</p>}
           </div>
 
           {/* ── Banner + Submit ── */}

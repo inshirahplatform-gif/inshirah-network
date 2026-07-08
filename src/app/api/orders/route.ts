@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { dbConnect } from "@/lib/dbConnect";
+import { verifySession, COOKIE_NAME } from "@/lib/session";
 import { Order, Product, Promoter } from "@/models";
 
 export async function POST(request: NextRequest) {
@@ -8,10 +9,17 @@ export async function POST(request: NextRequest) {
     await dbConnect();
 
     const body = await request.json();
-    const { productId, customerName, customerPhone, shippingAddress } = body;
+    const { items, customerName, customerPhone, shippingAddress, totalAmount } = body;
 
     // Validate required fields
-    if (!productId || !customerName || !customerPhone || !shippingAddress) {
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return NextResponse.json(
+        { error: "কমপক্ষে একটি প্রোডাক্ট নির্বাচন করুন" },
+        { status: 400 }
+      );
+    }
+
+    if (!customerName || !customerPhone || !shippingAddress) {
       return NextResponse.json(
         { error: "সব প্রয়োজনীয় তথ্য দিন" },
         { status: 400 }
@@ -20,60 +28,91 @@ export async function POST(request: NextRequest) {
 
     // Read the referrer tracking cookie for promoter attribution
     const cookieStore = await cookies();
-    const referrerCookie = cookieStore.get("inshirah_referrer");
+    const referrerCookie = cookieStore.get("inshirah_ref");
     const promoterId: string | undefined = referrerCookie?.value || undefined;
 
-    // Fetch and validate the product
-    const product = await Product.findById(productId);
-    if (!product) {
-      return NextResponse.json(
-        { error: "প্রোডাক্ট পাওয়া যায়নি" },
-        { status: 404 }
-      );
+    // Get current session to check for self-purchase
+    const sessionCookie = cookieStore.get(COOKIE_NAME);
+    const session = sessionCookie ? await verifySession(sessionCookie.value) : null;
+
+    // Rule 3: Self-Purchase Block - If logged-in user is the promoter, no commission
+    let finalPromoterId = promoterId;
+    if (session && promoterId && session.userId === promoterId) {
+      finalPromoterId = undefined; // Self-purchase blocked
     }
 
-    // Shariah & stock validation
-    if (product.stockQuantity < 1) {
+    // Validate all products and calculate commission
+    const orderItems = [];
+    let calculatedTotal = 0;
+    let totalCommission = 0;
+
+    for (const item of items) {
+      const product = await Product.findById(item.productId);
+      if (!product) {
+        return NextResponse.json(
+          { error: `প্রোডাক্ট পাওয়া যায়নি: ${item.productId}` },
+          { status: 404 }
+        );
+      }
+
+      // Stock validation
+      if (product.stockQuantity < item.quantity) {
+        return NextResponse.json(
+          { error: `পর্যাপ্ত স্টক নেই: ${product.title}` },
+          { status: 400 }
+        );
+      }
+
+      // Deduct stock
+      product.stockQuantity -= item.quantity;
+      if (product.stockQuantity === 0) {
+        product.status = "hidden";
+      }
+      await product.save();
+
+      const itemTotal = product.price * item.quantity;
+      const itemCommission = finalPromoterId
+        ? (itemTotal * product.commissionPercentage) / 100
+        : 0;
+
+      orderItems.push({
+        productId: product._id,
+        merchantId: product.merchantId,
+        quantity: item.quantity,
+        price: product.price,
+        commissionPercentage: product.commissionPercentage,
+        commissionAmount: itemCommission,
+      });
+
+      calculatedTotal += itemTotal;
+      totalCommission += itemCommission;
+    }
+
+    // Validate total amount matches
+    if (totalAmount !== calculatedTotal) {
       return NextResponse.json(
-        {
-          error:
-            "দুঃখিত, এই প্রোডাক্টটির স্টক এইমাত্র শেষ হয়ে গেছে। স্টক ছাড়া অর্ডার গ্রহণ করা শরীয়াহ পরিপন্থী।",
-        },
+        { error: "মোট পরিমাণ মিলছে না" },
         { status: 400 }
       );
     }
 
-    // Deduct stock and auto-hide if it hits zero
-    product.stockQuantity -= 1;
-    if (product.stockQuantity === 0) {
-      product.status = "hidden";
-    }
-    await product.save();
-
-    // Calculate commission amount (only meaningful if a promoter is attributed)
-    const commissionAmount = promoterId
-      ? (product.price * product.commissionPercentage) / 100
-      : 0;
-
-    // Create the order
+    // Create the order (group by merchant if needed, for now create single order)
     const order = await Order.create({
-      productId,
-      merchantId: product.merchantId,
-      promoterId,
+      items: orderItems,
       customerName,
       customerPhone,
       shippingAddress,
-      totalAmount: product.price,
-      commissionAmount,
+      totalAmount: calculatedTotal,
+      commissionAmount: totalCommission,
+      promoterId: finalPromoterId,
       status: "Pending",
     });
 
-    // Credit the promoter's pendingBalance only.
-    // totalEarned is updated later when the order is marked Delivered (80% share).
-    if (promoterId && commissionAmount > 0) {
-      const promoter = await Promoter.findById(promoterId);
+    // Credit the promoter's pendingBalance
+    if (finalPromoterId && totalCommission > 0) {
+      const promoter = await Promoter.findById(finalPromoterId);
       if (promoter) {
-        promoter.pendingBalance += commissionAmount;
+        promoter.pendingBalance += totalCommission;
         await promoter.save();
       }
     }

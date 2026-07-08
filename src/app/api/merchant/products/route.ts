@@ -43,6 +43,9 @@ export async function POST(request: NextRequest) {
       // image fields — one of these will be present
       imageFile,   // base64 data URI (file upload mode)
       imageUrl: rawImageUrl, // external URL (link mode)
+      // gallery images
+      galleryFiles, // array of base64 data URIs
+      galleryUrls,  // array of external URLs
     } = body as {
       title: string;
       description: string;
@@ -51,6 +54,8 @@ export async function POST(request: NextRequest) {
       stockQuantity: number;
       imageFile?: string;
       imageUrl?: string;
+      galleryFiles?: string[];
+      galleryUrls?: string[];
     };
 
     // ── Validation ────────────────────────────────────────────────────────
@@ -76,6 +81,7 @@ export async function POST(request: NextRequest) {
     // ── Image handling ────────────────────────────────────────────────────
     let imageUrl = "";
     let cloudinaryPublicId = "";
+    let galleryImages: string[] = [];
 
     if (imageFile && imageFile.startsWith("data:image/")) {
       // File upload — push to Cloudinary
@@ -96,6 +102,29 @@ export async function POST(request: NextRequest) {
     }
     // If neither provided, imageUrl stays "" (optional field)
 
+    // ── Gallery images handling ───────────────────────────────────────────
+    if (galleryFiles && Array.isArray(galleryFiles)) {
+      for (const file of galleryFiles) {
+        if (file && file.startsWith("data:image/")) {
+          try {
+            const result = await uploadToCloudinary(file);
+            galleryImages.push(result.secureUrl);
+          } catch (uploadErr) {
+            console.error("Gallery image upload error:", uploadErr);
+            // Continue with other images even if one fails
+          }
+        }
+      }
+    }
+
+    if (galleryUrls && Array.isArray(galleryUrls)) {
+      for (const url of galleryUrls) {
+        if (url && url.trim().startsWith("http")) {
+          galleryImages.push(url.trim());
+        }
+      }
+    }
+
     await dbConnect();
 
     const product = await Product.create({
@@ -107,6 +136,7 @@ export async function POST(request: NextRequest) {
       stockQuantity,
       imageUrl,
       cloudinaryPublicId,
+      galleryImages,
       status: "active",
     });
 

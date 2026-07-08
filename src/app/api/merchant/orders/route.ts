@@ -52,7 +52,7 @@ export async function GET(_request: NextRequest) {
   }
 }
 
-// ── PATCH: mark order as Delivered + escrow split ─────────────────────────────
+// ── PATCH: update order status ───────────────────────────────────────────────
 export async function PATCH(request: NextRequest) {
   const session = await requireMerchant();
   if (!session) {
@@ -66,13 +66,10 @@ export async function PATCH(request: NextRequest) {
     await dbConnect();
 
     const body = await request.json() as {
-      orderId?:      string;
-      status?:       string;
-      pickupName?:   string;
-      pickupPhone?:  string;
-      pickupAddress?: string;
+      orderId?: string;
+      status?: string;
     };
-    const { orderId, status, pickupName, pickupPhone, pickupAddress } = body;
+    const { orderId, status } = body;
 
     if (!orderId || !status) {
       return NextResponse.json(
@@ -80,9 +77,11 @@ export async function PATCH(request: NextRequest) {
         { status: 400 }
       );
     }
-    if (status !== "Delivered") {
+
+    const validStatuses = ["Pending", "Confirmed", "Shipped", "Delivered", "Cancelled"];
+    if (!validStatuses.includes(status)) {
       return NextResponse.json(
-        { error: "status হতে হবে 'Delivered'" },
+        { error: "অবৈধ স্ট্যাটাস" },
         { status: 400 }
       );
     }
@@ -94,50 +93,52 @@ export async function PATCH(request: NextRequest) {
     if (order.merchantId.toString() !== session.userId) {
       return NextResponse.json({ error: "এই অর্ডারটি আপনার নয়।" }, { status: 403 });
     }
-    if (order.status === "Delivered" || order.status === "Cancelled") {
-      return NextResponse.json(
-        { error: "এই অর্ডারের স্ট্যাটাস ইতিমধ্যে আপডেট করা হয়েছে।" },
-        { status: 400 }
-      );
-    }
 
-    const releaseDate     = new Date();
-    releaseDate.setDate(releaseDate.getDate() + ESCROW_DAYS);
-
-    const totalCommission = order.commissionAmount ?? 0;
-    const promoterShare   = totalCommission * PROMOTER_SHARE;
-    const merchantNet     = order.totalAmount - totalCommission;
-
-    if (order.promoterId && totalCommission > 0) {
-      const promoter = await Promoter.findById(order.promoterId);
-      if (promoter) {
-        promoter.pendingBalance = Math.max(0, promoter.pendingBalance - totalCommission);
-        promoter.holdBalance   += promoterShare;
-        await promoter.save();
+    // Handle status transitions
+    if (status === "Delivered") {
+      if (order.status === "Delivered" || order.status === "Cancelled") {
+        return NextResponse.json(
+          { error: "এই অর্ডারের স্ট্যাটাস ইতিমধ্যে আপডেট করা হয়েছে।" },
+          { status: 400 }
+        );
       }
+
+      const releaseDate = new Date();
+      releaseDate.setDate(releaseDate.getDate() + ESCROW_DAYS);
+
+      const totalCommission = order.commissionAmount ?? 0;
+      const promoterShare = totalCommission * PROMOTER_SHARE;
+      const merchantNet = order.totalAmount - totalCommission;
+
+      if (order.promoterId && totalCommission > 0) {
+        const promoter = await Promoter.findById(order.promoterId);
+        if (promoter) {
+          promoter.pendingBalance = Math.max(0, promoter.pendingBalance - totalCommission);
+          promoter.holdBalance += promoterShare;
+          await promoter.save();
+        }
+      }
+
+      const merchant = await Merchant.findById(session.userId);
+      if (merchant && merchantNet > 0) {
+        merchant.withdrawableBalance += merchantNet;
+        await merchant.save();
+      }
+
+      order.status = "Delivered";
+      order.commissionStatus = totalCommission > 0 && order.promoterId ? "held" : "none";
+      order.escrowReleaseDate = releaseDate;
+    } else {
+      // Simple status update for other transitions
+      order.status = status as any;
     }
 
-    const merchant = await Merchant.findById(session.userId);
-    if (merchant && merchantNet > 0) {
-      merchant.withdrawableBalance += merchantNet;
-      await merchant.save();
-    }
-
-    order.status           = "Delivered";
-    order.commissionStatus = totalCommission > 0 && order.promoterId ? "held" : "none";
-    order.escrowReleaseDate = releaseDate;
-    if (pickupName)    order.pickupName    = pickupName;
-    if (pickupPhone)   order.pickupPhone   = pickupPhone;
-    if (pickupAddress) order.pickupAddress = pickupAddress;
     await order.save();
 
     return NextResponse.json(
       {
-        message:
-          "আলহামদুলিল্লাহ, অর্ডারটি সফলভাবে ডেলিভার্ড মার্ক করা হয়েছে। " +
-          `প্রমোটার কমিশন ${releaseDate.toLocaleDateString("bn-BD")} তারিখে মুক্ত হবে।`,
+        message: "অর্ডার স্ট্যাটাস আপডেট করা হয়েছে",
         order,
-        escrowReleaseDate: releaseDate,
       },
       { status: 200 }
     );

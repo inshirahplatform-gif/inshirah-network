@@ -1,29 +1,27 @@
+"use client";
+
+import { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { Noto_Sans_Bengali } from "next/font/google";
-import { dbConnect } from "@/lib/dbConnect";
-import { Product } from "@/models";
-import type { Metadata } from "next";
+import { useRouter } from "next/navigation";
 
 const notoSansBengali = Noto_Sans_Bengali({
   subsets: ["bengali"],
   weight: ["400", "500", "600", "700"],
 });
 
-// Next.js 15/16: params is a Promise
-interface PageProps {
-  params: Promise<{ productId: string }>;
-}
-
-export async function generateMetadata({
-  params,
-}: PageProps): Promise<Metadata> {
-  const { productId } = await params;
-  await dbConnect();
-  const product = await Product.findById(productId).lean();
-  return {
-    title: product ? product.title : "প্রোডাক্ট",
-  };
-}
+type Product = {
+  _id: string;
+  title: string;
+  description: string;
+  price: number;
+  commissionPercentage: number;
+  stockQuantity: number;
+  status: string;
+  imageUrl?: string;
+  galleryImages?: string[];
+};
 
 function formatBdt(amount: number) {
   return new Intl.NumberFormat("bn-BD", {
@@ -33,14 +31,54 @@ function formatBdt(amount: number) {
   }).format(amount);
 }
 
-export default async function ProductViewPage({ params }: PageProps) {
-  const { productId } = await params;
+export default function ProductViewPage({ params }: { params: Promise<{ productId: string }> }) {
+  const router = useRouter();
+  const [product, setProduct] = useState<Product | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+  const [isHovering, setIsHovering] = useState(false);
+  const [selectedImage, setSelectedImage] = useState(0);
 
-  await dbConnect();
-  const product = await Product.findById(productId).lean();
+  useEffect(() => {
+    const fetchProduct = async () => {
+      try {
+        const { productId } = await params;
+        const res = await fetch(`/api/products/${productId}`);
+        const data = await res.json();
 
-  // ── Not found ──────────────────────────────────────────────────────────────
-  if (!product) {
+        if (!res.ok) {
+          setError(data.error ?? "প্রোডাক্ট লোড করতে সমস্যা হয়েছে");
+          return;
+        }
+
+        setProduct(data.product);
+      } catch {
+        setError("নেটওয়ার্ক সমস্যা হয়েছে। পেজ রিফ্রেশ করুন।");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchProduct();
+  }, [params]);
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    setMousePosition({ x, y });
+  };
+
+  if (isLoading) {
+    return (
+      <div className={`${notoSansBengali.className} flex min-h-screen items-center justify-center bg-zinc-950 px-6`}>
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
+      </div>
+    );
+  }
+
+  if (error || !product) {
     return (
       <div
         className={`${notoSansBengali.className} flex min-h-screen items-center justify-center bg-zinc-950 px-6`}
@@ -48,10 +86,10 @@ export default async function ProductViewPage({ params }: PageProps) {
         <div className="text-center">
           <p className="text-5xl">😔</p>
           <h1 className="mt-6 text-2xl font-bold text-zinc-50">
-            প্রোডাক্টটি পাওয়া যায়নি
+            {error || "প্রোডাক্টটি পাওয়া যায়নি"}
           </h1>
           <p className="mt-3 text-zinc-400">
-            আপনি যে পণ্যটি খুঁজছেন সেটি আর পাওয়া যাচ্ছে না।
+            {error || "আপনি যে পণ্যটি খুঁজছেন সেটি আর পাওয়া যাচ্ছে না।"}
           </p>
           <Link
             href="/"
@@ -81,60 +119,90 @@ export default async function ProductViewPage({ params }: PageProps) {
         </Link>
 
         <div className="mt-8 grid gap-10 lg:grid-cols-[1fr_420px]">
-          {/* ── Left: image placeholder ─────────────────────────────────────── */}
-          <div className="relative overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900">
-            <div className="flex aspect-square w-full items-center justify-center bg-gradient-to-br from-zinc-900 to-zinc-950">
-              {/* Decorative Islamic geometric pattern background */}
-              <div className="pointer-events-none absolute inset-0 opacity-5">
-                <svg
-                  viewBox="0 0 200 200"
-                  className="h-full w-full"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <pattern
-                    id="geo"
-                    x="0"
-                    y="0"
-                    width="40"
-                    height="40"
-                    patternUnits="userSpaceOnUse"
-                  >
-                    <polygon
-                      points="20,2 38,11 38,29 20,38 2,29 2,11"
-                      stroke="#4ade80"
-                      strokeWidth="0.8"
-                      fill="none"
+          {/* ── Left: image gallery with zoom ─────────────────────────────────────── */}
+          <div className="space-y-4">
+            {/* Main Image */}
+            <div className="relative overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900">
+              <div 
+                className="relative aspect-square w-full overflow-hidden cursor-zoom-in"
+                onMouseMove={handleMouseMove}
+                onMouseEnter={() => setIsHovering(true)}
+                onMouseLeave={() => setIsHovering(false)}
+              >
+                {product.imageUrl || (product.galleryImages && product.galleryImages[selectedImage]) ? (
+                  <>
+                    <Image
+                      src={product.galleryImages && product.galleryImages[selectedImage] ? product.galleryImages[selectedImage]! : product.imageUrl!}
+                      alt={product.title}
+                      fill
+                      className="object-cover transition-transform duration-200"
+                      style={{
+                        transform: isHovering ? 'scale(2)' : 'scale(1)',
+                        transformOrigin: `${mousePosition.x}% ${mousePosition.y}%`,
+                      }}
+                      unoptimized
                     />
-                    <line
-                      x1="20"
-                      y1="2"
-                      x2="20"
-                      y2="38"
-                      stroke="#4ade80"
-                      strokeWidth="0.3"
-                    />
-                    <line
-                      x1="2"
-                      y1="20"
-                      x2="38"
-                      y2="20"
-                      stroke="#4ade80"
-                      strokeWidth="0.3"
-                    />
-                  </pattern>
-                  <rect width="200" height="200" fill="url(#geo)" />
-                </svg>
+                    {isHovering && (
+                      <div className="absolute inset-0 border-2 border-emerald-500/50 pointer-events-none" />
+                    )}
+                  </>
+                ) : (
+                  <div className="flex h-full items-center justify-center bg-gradient-to-br from-zinc-900 to-zinc-950">
+                    <span className="text-6xl select-none">🛍️</span>
+                  </div>
+                )}
               </div>
-              <span className="relative text-6xl select-none">🛍️</span>
+
+              {/* Status badge */}
+              {isOutOfStock && (
+                <div className="absolute inset-0 flex items-center justify-center bg-zinc-950/70 backdrop-blur-sm">
+                  <span className="rounded-full border border-red-700/50 bg-red-950/80 px-5 py-2 text-sm font-semibold text-red-400">
+                    স্টক শেষ
+                  </span>
+                </div>
+              )}
             </div>
 
-            {/* Status badge */}
-            {isOutOfStock && (
-              <div className="absolute inset-0 flex items-center justify-center bg-zinc-950/70 backdrop-blur-sm">
-                <span className="rounded-full border border-red-700/50 bg-red-950/80 px-5 py-2 text-sm font-semibold text-red-400">
-                  স্টক শেষ
-                </span>
+            {/* Thumbnail Gallery */}
+            {product.galleryImages && product.galleryImages.length > 0 && (
+              <div className="flex gap-2 overflow-x-auto pb-2">
+                {product.imageUrl && (
+                  <button
+                    onClick={() => setSelectedImage(-1)}
+                    className={`relative h-20 w-20 shrink-0 overflow-hidden rounded-lg border-2 transition-all ${
+                      selectedImage === -1
+                        ? "border-emerald-500 opacity-100"
+                        : "border-zinc-700 opacity-60 hover:opacity-100"
+                    }`}
+                  >
+                    <Image
+                      src={product.imageUrl}
+                      alt="Main image"
+                      fill
+                      className="object-cover"
+                      unoptimized
+                    />
+                  </button>
+                )}
+                {product.galleryImages.map((img, index) => (
+                  <button
+                    key={index}
+                    onClick={() => setSelectedImage(index)}
+                    className={`relative h-20 w-20 shrink-0 overflow-hidden rounded-lg border-2 transition-all ${
+                      selectedImage === index
+                        ? "border-emerald-500 opacity-100"
+                        : "border-zinc-700 opacity-60 hover:opacity-100"
+                    }`}
+                  >
+                    <Image
+                      src={img}
+                      alt={`Gallery ${index + 1}`}
+                      fill
+                      className="object-cover"
+                      unoptimized
+                    />
+                  </button>
+                ))}
               </div>
             )}
           </div>
@@ -211,18 +279,31 @@ export default async function ProductViewPage({ params }: PageProps) {
 
             {/* CTA */}
             <div className="mt-8 space-y-3">
-              <Link
-                href={`/checkout/${product._id.toString()}`}
-                aria-disabled={isOutOfStock}
-                tabIndex={isOutOfStock ? -1 : 0}
+              <button
+                onClick={() => {
+                  // Add to cart
+                  const cartItem = {
+                    productId: product._id,
+                    title: product.title,
+                    price: product.price,
+                    imageUrl: product.imageUrl,
+                    quantity: 1,
+                    stockQuantity: product.stockQuantity,
+                  };
+                  const existingCart = JSON.parse(localStorage.getItem("inshirah_cart") || "[]");
+                  const updatedCart = [...existingCart, cartItem];
+                  localStorage.setItem("inshirah_cart", JSON.stringify(updatedCart));
+                  router.push("/cart");
+                }}
+                disabled={isOutOfStock}
                 className={`inline-flex h-13 w-full items-center justify-center rounded-xl px-6 text-base font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${
                   isOutOfStock
                     ? "pointer-events-none cursor-not-allowed bg-zinc-800 text-zinc-500"
                     : "bg-emerald-700 text-white hover:bg-emerald-600 focus-visible:outline-emerald-500"
                 }`}
               >
-                {isOutOfStock ? "স্টক নেই" : "অর্ডার করুন"}
-              </Link>
+                {isOutOfStock ? "স্টক নেই" : "কার্টে যোগ করুন"}
+              </button>
 
               <p className="text-center text-xs text-zinc-600">
                 শারীয়াহ-সম্মত লেনদেন। কোনো সুদ বা অনৈতিক শর্ত নেই।
