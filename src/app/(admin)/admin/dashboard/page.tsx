@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import { Noto_Sans_Bengali } from "next/font/google";
 
 const notoSansBengali = Noto_Sans_Bengali({
@@ -98,7 +98,7 @@ const PAYMENT_METHOD_ICONS: Record<string, string> = {
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-export default function AdminDashboardPage() {
+function AdminDashboardContent() {
   const [stats, setStats] = useState<AdminStats | null>(null);
   const [pendingPayouts, setPendingPayouts] = useState<PendingPayout[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -381,5 +381,13 @@ export default function AdminDashboardPage() {
         )}
       </section>
     </div>
+  );
+}
+
+export default function AdminDashboardPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center py-16 text-zinc-400">লোড হচ্ছে...</div>}>
+      <AdminDashboardContent />
+    </Suspense>
   );
 }
