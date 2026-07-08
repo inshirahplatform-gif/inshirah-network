@@ -5,12 +5,13 @@ import { Order } from "@/models";
 // Public endpoint - no auth required for order tracking
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     await dbConnect();
 
-    const order = await Order.findById(params.id)
+    const order = await Order.findById(id)
       .populate("items.productId")
       .lean();
 

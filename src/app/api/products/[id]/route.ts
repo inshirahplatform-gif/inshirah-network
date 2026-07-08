@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { dbConnect } from "@/lib/dbConnect";
 import { Product } from "@/models";
 
@@ -6,12 +6,13 @@ import { Product } from "@/models";
 // Returns a single product by ID.
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     await dbConnect();
 
-    const product = await Product.findById(params.id).lean();
+    const product = await Product.findById(id).lean();
 
     if (!product) {
       return NextResponse.json(
