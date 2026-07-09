@@ -28,7 +28,7 @@ export default function ShariahPolicyPage() {
 
         <div className="mt-8 rounded-xl border border-amber-300 bg-amber-50 px-5 py-4 dark:border-amber-800/40 dark:bg-amber-950/20">
           <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
-            ⚠️ গুরুত্বপূর্ণ: প্ল্যাটফর্মে নিবন্ধন বা পণ্য তালিকাভুক্তির মাধ্যমে
+            গুরুত্বপূর্ণ: প্ল্যাটফর্মে নিবন্ধন বা পণ্য তালিকাভুক্তির মাধ্যমে
             আপনি নিচের সকল শর্ত মেনে নিচ্ছেন বলে গণ্য হবে।
           </p>
         </div>

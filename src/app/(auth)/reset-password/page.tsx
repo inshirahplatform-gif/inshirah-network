@@ -95,8 +95,10 @@ function ResetPasswordForm() {
   return (
     <div className="w-full max-w-md space-y-6">
       <div className="text-center">
-        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-950/50 text-2xl">
-          🔒
+        <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-950/50 text-2xl text-emerald-400">
+          <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+          </svg>
         </div>
         <h1 className="text-2xl font-bold text-zinc-50">নতুন পাসওয়ার্ড সেট করুন</h1>
         <p className="mt-2 text-sm text-zinc-400">
@@ -160,7 +162,9 @@ function ResetPasswordForm() {
         </form>
       ) : (
         <div className="rounded-2xl border border-emerald-800/40 bg-emerald-950/20 p-6 text-center">
-          <p className="text-4xl">✅</p>
+          <svg className="mx-auto h-16 w-16 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
           <p className="mt-4 text-sm font-medium text-emerald-300">{banner?.text}</p>
           <p className="mt-2 text-xs text-zinc-500">৩ সেকেন্ডের মধ্যে লগ-ইন পেজে নিয়ে যাওয়া হবে…</p>
         </div>

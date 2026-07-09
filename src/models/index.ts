@@ -11,3 +11,6 @@ export {
 export { Review, type ReviewDocument } from "./review";
 export { Wishlist, type WishlistDocument } from "./wishlist";
 export { default as Installment, type InstallmentDocument } from "./installment";
+export { Wallet, type WalletDocument } from "./Wallet";
+export { WalletTransaction, type WalletTransactionDocument } from "./WalletTransaction";
+export { WithdrawRequest, type WithdrawRequestDocument } from "./WithdrawRequest";

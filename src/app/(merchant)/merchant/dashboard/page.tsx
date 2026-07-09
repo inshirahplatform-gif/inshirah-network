@@ -287,7 +287,9 @@ export default function MerchantDashboardPage() {
           </div>
         ) : pendingOrders.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
-            <span className="text-4xl">📋</span>
+            <svg className="h-12 w-12 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+            </svg>
             <p className="text-sm text-zinc-400 dark:text-zinc-500">কোনো পেন্ডিং অর্ডার নেই</p>
           </div>
         ) : (
@@ -309,7 +311,9 @@ export default function MerchantDashboardPage() {
                   </p>
                   {order.courierTrackingId && (
                     <p className="mt-1 flex items-center gap-1 text-xs text-emerald-600 dark:text-emerald-400">
-                      <span>📦</span>
+                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                      </svg>
                       <span className="font-mono font-semibold">{order.courierTrackingId}</span>
                       <span className="text-zinc-400">({order.courierStatus})</span>
                     </p>
@@ -349,7 +353,9 @@ export default function MerchantDashboardPage() {
             <div className="space-y-3 p-6">{[...Array(4)].map((_, i) => <div key={i} className="h-10 animate-pulse rounded-lg bg-zinc-100 dark:bg-zinc-800" />)}</div>
           ) : recentOrders.length === 0 ? (
             <div className="flex flex-col items-center gap-2 py-12 text-center">
-              <span className="text-3xl">📋</span>
+              <svg className="h-10 w-10 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+              </svg>
               <p className="text-sm text-zinc-400 dark:text-zinc-500">এখনো কোনো অর্ডার নেই</p>
             </div>
           ) : (

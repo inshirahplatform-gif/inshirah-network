@@ -104,7 +104,9 @@ export default function ReturnsPage() {
         {/* Return Request Form */}
         {success ? (
           <div className="mt-8 rounded-2xl border border-emerald-800/50 bg-emerald-950/20 p-6 text-center">
-            <span className="text-4xl">✅</span>
+            <svg className="mx-auto h-16 w-16 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
             <h3 className="mt-4 text-lg font-semibold text-emerald-400">
               রিটার্ন রিকোয়েস্ট গ্রহণ করা হয়েছে
             </h3>

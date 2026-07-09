@@ -59,7 +59,11 @@ export default function ForgotPasswordPage() {
       <div className="flex min-h-screen items-center justify-center px-4">
         <div className="w-full max-w-md space-y-6">
           <div className="text-center">
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 text-2xl dark:bg-emerald-950/50">🔑</div>
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-100 text-2xl text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400">
+              <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+              </svg>
+            </div>
             <h1 className="text-2xl font-bold text-zinc-950 dark:text-zinc-50">পাসওয়ার্ড ভুলে গেছেন?</h1>
             <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">আপনার নিবন্ধিত ইমেইলে রিসেট লিংক পাঠানো হবে</p>
           </div>
@@ -98,7 +102,9 @@ export default function ForgotPasswordPage() {
             </form>
           ) : (
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-6 text-center dark:border-emerald-800/40 dark:bg-emerald-950/20">
-              <p className="text-4xl">📧</p>
+              <svg className="mx-auto h-16 w-16 text-emerald-600 dark:text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+              </svg>
               <p className="mt-4 text-sm font-medium text-emerald-800 dark:text-emerald-300">{banner?.text}</p>
               <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-600">ইমেইল না পেলে স্প্যাম ফোল্ডার চেক করুন। লিংক ১ ঘণ্টা বৈধ।</p>
               <button type="button" onClick={() => { setSent(false); setEmail(""); setBanner(null); }}

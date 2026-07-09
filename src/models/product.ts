@@ -18,6 +18,17 @@ const productSchema = new Schema(
     imageUrl: { type: String, default: "" },
     galleryImages: { type: [String], default: [] },
     cloudinaryPublicId: { type: String, default: "" },
+    // Product variants
+    variants: [
+      {
+        size: { type: String },
+        color: { type: String },
+        stockQuantity: { type: Number, default: 0 },
+        price: { type: Number },
+      },
+    ],
+    averageRating: { type: Number, default: 0 },
+    totalReviews: { type: Number, default: 0 },
   },
   { timestamps: true }
 );
@@ -37,6 +48,14 @@ export type ProductDocument = {
   imageUrl: string;
   galleryImages: string[];
   cloudinaryPublicId: string;
+  variants: Array<{
+    size?: string;
+    color?: string;
+    stockQuantity: number;
+    price?: number;
+  }>;
+  averageRating: number;
+  totalReviews: number;
 };
 
 export const Product = models.Product ?? model("Product", productSchema);

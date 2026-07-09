@@ -124,7 +124,9 @@ function InstallmentCreateContent() {
       <div className={`${notoSansBengali.className} min-h-screen bg-zinc-950`}>
         <div className="mx-auto max-w-2xl px-6 py-8">
           <div className="rounded-2xl border border-emerald-800/50 bg-emerald-950/20 p-8 text-center">
-            <span className="text-6xl">✅</span>
+            <svg className="mx-auto h-20 w-20 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
             <h3 className="mt-4 text-2xl font-bold text-emerald-400">
               ইনস্টলমেন্ট প্ল্যান সফলভাবে তৈরি হয়েছে
             </h3>

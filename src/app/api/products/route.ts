@@ -47,13 +47,16 @@ export async function GET(request: NextRequest) {
       case "popular":
         sortOption = { stockQuantity: -1 };
         break;
+      case "rating":
+        sortOption = { averageRating: -1 };
+        break;
       default:
         sortOption = { createdAt: -1 };
     }
 
     const products = await Product.find(query)
       .sort(sortOption)
-      .select("title price commissionPercentage stockQuantity imageUrl category")
+      .select("title price commissionPercentage stockQuantity imageUrl category averageRating totalReviews")
       .lean();
 
     return NextResponse.json({ products }, { status: 200 });

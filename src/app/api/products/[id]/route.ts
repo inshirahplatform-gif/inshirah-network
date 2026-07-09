@@ -21,17 +21,28 @@ export async function GET(
       );
     }
 
-    // Get related products from same category
+    // Get related products from same category with better sorting
     const relatedProducts = await Product.find({
       _id: { $ne: id },
       category: product.category,
       status: "active",
     })
+      .sort({ averageRating: -1, stockQuantity: -1 })
       .limit(4)
-      .select("title price imageUrl")
+      .select("title price imageUrl averageRating totalReviews commissionPercentage")
       .lean();
 
-    return NextResponse.json({ product, relatedProducts }, { status: 200 });
+    // Get popular products for "recommended for you"
+    const recommendedProducts = await Product.find({
+      _id: { $ne: id },
+      status: "active",
+    })
+      .sort({ averageRating: -1, createdAt: -1 })
+      .limit(4)
+      .select("title price imageUrl averageRating totalReviews commissionPercentage")
+      .lean();
+
+    return NextResponse.json({ product, relatedProducts, recommendedProducts }, { status: 200 });
   } catch (error) {
     console.error("Product fetch error:", error);
     return NextResponse.json(

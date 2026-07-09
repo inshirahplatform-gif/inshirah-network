@@ -18,6 +18,8 @@ type Product = {
   stockQuantity: number;
   imageUrl?: string;
   category?: string;
+  averageRating?: number;
+  totalReviews?: number;
 };
 
 function formatBdt(amount: number) {
@@ -37,6 +39,9 @@ export default function ProductsPage() {
   const [minPrice, setMinPrice] = useState("");
   const [maxPrice, setMaxPrice] = useState("");
   const [sortBy, setSortBy] = useState("newest");
+  const [minRating, setMinRating] = useState(0);
+  const [showAutocomplete, setShowAutocomplete] = useState(false);
+  const [autocompleteResults, setAutocompleteResults] = useState<string[]>([]);
 
   const CATEGORIES = ["all", "ইলেকট্রনিক্স", "পোশাক", "বই", "খাবার", "স্বাস্থ্য", "ঘরসজ্জা", "অন্যান্য"];
 
@@ -70,6 +75,27 @@ export default function ProductsPage() {
     fetchProducts();
   }, [searchQuery, selectedCategory, minPrice, maxPrice, sortBy]);
 
+  // Autocomplete search
+  useEffect(() => {
+    if (searchQuery.length > 2) {
+      const titles = products
+        .map((p) => p.title)
+        .filter((title) => title.toLowerCase().includes(searchQuery.toLowerCase()))
+        .slice(0, 5);
+      setAutocompleteResults(titles);
+      setShowAutocomplete(true);
+    } else {
+      setShowAutocomplete(false);
+    }
+  }, [searchQuery, products]);
+
+  const filteredProducts = products.filter((product) => {
+    if (minRating > 0 && (!product.averageRating || product.averageRating < minRating)) {
+      return false;
+    }
+    return true;
+  });
+
   return (
     <div className={`${notoSansBengali.className} min-h-screen bg-zinc-950`}>
       <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-12">
@@ -89,6 +115,8 @@ export default function ProductsPage() {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                onFocus={() => setShowAutocomplete(true)}
+                onBlur={() => setTimeout(() => setShowAutocomplete(false), 200)}
                 placeholder="প্রোডাক্ট খুঁজুন..."
                 className="w-full rounded-xl border border-zinc-800 bg-zinc-900 px-4 py-3 pl-12 text-sm text-zinc-50 outline-none transition-colors focus-visible:border-emerald-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-emerald-500"
               />
@@ -105,6 +133,21 @@ export default function ProductsPage() {
                   d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
                 />
               </svg>
+
+              {/* Autocomplete Dropdown */}
+              {showAutocomplete && autocompleteResults.length > 0 && (
+                <div className="absolute z-10 mt-2 w-full rounded-xl border border-zinc-800 bg-zinc-900 shadow-xl">
+                  {autocompleteResults.map((title, index) => (
+                    <button
+                      key={index}
+                      onClick={() => setSearchQuery(title)}
+                      className="w-full px-4 py-3 text-left text-sm text-zinc-50 hover:bg-zinc-800 transition-colors"
+                    >
+                      {title}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
             {searchQuery && (
               <p className="mt-2 text-sm text-zinc-400">
@@ -134,6 +177,24 @@ export default function ProductsPage() {
               />
             </div>
 
+            {/* Rating Filter */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-zinc-400">রেটিং:</span>
+              {[1, 2, 3, 4, 5].map((rating) => (
+                <button
+                  key={rating}
+                  onClick={() => setMinRating(minRating === rating ? 0 : rating)}
+                  className={`text-lg transition-colors ${
+                    minRating === rating ? "text-amber-400" : "text-zinc-600 hover:text-amber-400"
+                  }`}
+                >
+                  <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                  </svg>
+                </button>
+              ))}
+            </div>
+
             {/* Sort */}
             <select
               value={sortBy}
@@ -144,10 +205,11 @@ export default function ProductsPage() {
               <option value="price-low">দাম কম থেকে বেশি</option>
               <option value="price-high">দাম বেশি থেকে কম</option>
               <option value="popular">জনপ্রিয়</option>
+              <option value="rating">রেটিং বেশি থেকে কম</option>
             </select>
 
             {/* Clear Filters */}
-            {(searchQuery || selectedCategory !== "all" || minPrice || maxPrice || sortBy !== "newest") && (
+            {(searchQuery || selectedCategory !== "all" || minPrice || maxPrice || sortBy !== "newest" || minRating > 0) && (
               <button
                 onClick={() => {
                   setSearchQuery("");
@@ -155,6 +217,7 @@ export default function ProductsPage() {
                   setMinPrice("");
                   setMaxPrice("");
                   setSortBy("newest");
+                  setMinRating(0);
                 }}
                 className="rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-400 hover:border-zinc-700 hover:text-zinc-300"
               >
@@ -250,7 +313,7 @@ export default function ProductsPage() {
                   </div>
                 ))}
               </div>
-            ) : products.length === 0 ? (
+            ) : filteredProducts.length === 0 ? (
               <div className="flex min-h-[400px] items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-900">
                 <div className="text-center">
                   <p className="text-lg font-medium text-zinc-50">
@@ -263,7 +326,7 @@ export default function ProductsPage() {
               </div>
             ) : (
               <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {products.map((product) => (
+                {filteredProducts.map((product) => (
                   <Link
                     key={product._id}
                     href={`/products/${product._id}`}
@@ -310,6 +373,31 @@ export default function ProductsPage() {
                       <h3 className="line-clamp-2 text-base font-semibold text-zinc-50 group-hover:text-emerald-400">
                         {product.title}
                       </h3>
+
+                      {/* Rating Display */}
+                      {product.averageRating && (
+                        <div className="mt-2 flex items-center gap-1">
+                          <div className="flex gap-0.5">
+                            {[1, 2, 3, 4, 5].map((star) => (
+                              <span
+                                key={star}
+                                className={`text-sm ${
+                                  star <= Math.round(product.averageRating || 0)
+                                    ? "text-amber-400"
+                                    : "text-zinc-700"
+                                }`}
+                              >
+                                <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                                  <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                                </svg>
+                              </span>
+                            ))}
+                          </div>
+                          <span className="text-xs text-zinc-500">
+                            ({product.totalReviews || 0})
+                          </span>
+                        </div>
+                      )}
 
                       <div className="mt-3 flex items-center justify-between">
                         <p className="text-lg font-bold text-emerald-400">
