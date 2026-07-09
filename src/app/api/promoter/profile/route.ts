@@ -47,6 +47,7 @@ export async function GET(_request: NextRequest) {
     return NextResponse.json({ promoter }, { status: 200 });
   } catch (error) {
     console.error("Promoter profile fetch error:", error);
+    console.error("Error details:", JSON.stringify(error, null, 2));
     return NextResponse.json(
       { error: "প্রোফাইল লোড করতে সমস্যা হয়েছে" },
       { status: 500 }

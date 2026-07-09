@@ -2,15 +2,25 @@ import { Schema, model, models, Types } from "mongoose";
 
 const orderSchema = new Schema(
   {
-    productId: {
-      type:     Schema.Types.ObjectId,
-      ref:      "Product",
-      required: true,
+    userId: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
     },
-    merchantId: {
-      type:     Schema.Types.ObjectId,
-      required: true,
-    },
+    items: [{
+      productId: {
+        type: Schema.Types.ObjectId,
+        ref: "Product",
+        required: true,
+      },
+      merchantId: {
+        type: Schema.Types.ObjectId,
+        required: true,
+      },
+      quantity: { type: Number, required: true },
+      price: { type: Number, required: true },
+      commissionPercentage: { type: Number, required: true },
+      commissionAmount: { type: Number, required: true },
+    }],
     promoterId: {
       type: Schema.Types.ObjectId,
       ref:  "Promoter",
@@ -20,6 +30,7 @@ const orderSchema = new Schema(
     customerName:    { type: String, required: true },
     customerPhone:   { type: String, required: true },
     shippingAddress: { type: String, required: true },
+    paymentMethod:   { type: String, enum: ["cod", "bkash", "nagad", "bank_transfer"], default: "cod" },
 
     // ── Merchant pickup details (for courier API) ──────────────────────────
     pickupName:    { type: String, default: "" },
@@ -79,13 +90,23 @@ orderSchema.index({ commissionStatus: 1, escrowReleaseDate: 1 });
 // ── TypeScript type ───────────────────────────────────────────────────────────
 export type CommissionStatus = "none" | "held" | "released" | "cancelled";
 
+export type OrderItem = {
+  productId: Types.ObjectId;
+  merchantId: Types.ObjectId;
+  quantity: number;
+  price: number;
+  commissionPercentage: number;
+  commissionAmount: number;
+};
+
 export type OrderDocument = {
-  productId:         Types.ObjectId;
-  merchantId:        Types.ObjectId;
+  userId?:           Types.ObjectId;
+  items:             OrderItem[];
   promoterId?:       Types.ObjectId;
   customerName:      string;
   customerPhone:     string;
   shippingAddress:   string;
+  paymentMethod:      "cod" | "bkash" | "nagad" | "bank_transfer";
   pickupName:        string;
   pickupPhone:       string;
   pickupAddress:     string;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { Noto_Sans_Bengali } from "next/font/google";
@@ -19,8 +19,26 @@ type Product = {
   commissionPercentage: number;
   stockQuantity: number;
   status: string;
+  category: string;
   imageUrl?: string;
   galleryImages?: string[];
+};
+
+type Review = {
+  _id: string;
+  rating: number;
+  title: string;
+  comment: string;
+  images: string[];
+  helpfulCount: number;
+  isVerifiedPurchase: boolean;
+  createdAt: string;
+};
+
+type ReviewSummary = {
+  totalReviews: number;
+  averageRating: number;
+  ratingDistribution: number[];
 };
 
 function formatBdt(amount: number) {
@@ -32,13 +50,25 @@ function formatBdt(amount: number) {
 }
 
 export default function ProductViewPage({ params }: { params: Promise<{ productId: string }> }) {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center py-16 text-zinc-400">লোড হচ্ছে...</div>}>
+      <ProductViewContent params={params} />
+    </Suspense>
+  );
+}
+
+function ProductViewContent({ params }: { params: Promise<{ productId: string }> }) {
   const router = useRouter();
   const [product, setProduct] = useState<Product | null>(null);
+  const [relatedProducts, setRelatedProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [isHovering, setIsHovering] = useState(false);
   const [selectedImage, setSelectedImage] = useState(0);
+  const [reviews, setReviews] = useState<Review[]>([]);
+  const [reviewSummary, setReviewSummary] = useState<ReviewSummary | null>(null);
+  const [showReviewForm, setShowReviewForm] = useState(false);
 
   useEffect(() => {
     const fetchProduct = async () => {
@@ -53,6 +83,7 @@ export default function ProductViewPage({ params }: { params: Promise<{ productI
         }
 
         setProduct(data.product);
+        setRelatedProducts(data.relatedProducts || []);
       } catch {
         setError("নেটওয়ার্ক সমস্যা হয়েছে। পেজ রিফ্রেশ করুন।");
       } finally {
@@ -60,7 +91,23 @@ export default function ProductViewPage({ params }: { params: Promise<{ productI
       }
     };
 
+    const fetchReviews = async () => {
+      try {
+        const { productId } = await params;
+        const res = await fetch(`/api/products/${productId}/reviews`);
+        const data = await res.json();
+
+        if (res.ok) {
+          setReviews(data.reviews || []);
+          setReviewSummary(data.summary || null);
+        }
+      } catch {
+        // Silently fail for reviews
+      }
+    };
+
     fetchProduct();
+    fetchReviews();
   }, [params]);
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -72,7 +119,7 @@ export default function ProductViewPage({ params }: { params: Promise<{ productI
 
   if (isLoading) {
     return (
-      <div className={`${notoSansBengali.className} flex min-h-screen items-center justify-center bg-zinc-950 px-6`}>
+      <div className={`${notoSansBengali.className} flex min-h-screen items-center justify-center bg-white px-6 dark:bg-zinc-950`}>
         <div className="h-8 w-8 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent" />
       </div>
     );
@@ -81,19 +128,23 @@ export default function ProductViewPage({ params }: { params: Promise<{ productI
   if (error || !product) {
     return (
       <div
-        className={`${notoSansBengali.className} flex min-h-screen items-center justify-center bg-zinc-950 px-6`}
+        className={`${notoSansBengali.className} flex min-h-screen items-center justify-center bg-white px-6 dark:bg-zinc-950`}
       >
         <div className="text-center">
-          <p className="text-5xl">😔</p>
-          <h1 className="mt-6 text-2xl font-bold text-zinc-50">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full border border-zinc-200 bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900">
+            <svg className="h-8 w-8 text-zinc-400 dark:text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </div>
+          <h1 className="mt-6 text-2xl font-bold text-zinc-950 dark:text-zinc-50">
             {error || "প্রোডাক্টটি পাওয়া যায়নি"}
           </h1>
-          <p className="mt-3 text-zinc-400">
+          <p className="mt-3 text-zinc-600 dark:text-zinc-400">
             {error || "আপনি যে পণ্যটি খুঁজছেন সেটি আর পাওয়া যাচ্ছে না।"}
           </p>
           <Link
             href="/"
-            className="mt-8 inline-flex h-11 items-center justify-center rounded-xl border border-zinc-700 bg-zinc-900 px-6 text-sm font-semibold text-zinc-50 transition-colors hover:border-emerald-700 hover:bg-emerald-950/40"
+            className="mt-8 inline-flex h-11 items-center justify-center rounded-xl border border-zinc-300 bg-white px-6 text-sm font-semibold text-zinc-950 transition-colors hover:border-emerald-700 hover:bg-emerald-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50 dark:hover:border-emerald-600 dark:hover:bg-emerald-950/40"
           >
             ← হোমে ফিরে যান
           </Link>
@@ -107,13 +158,13 @@ export default function ProductViewPage({ params }: { params: Promise<{ productI
   // ── Main product view ──────────────────────────────────────────────────────
   return (
     <div
-      className={`${notoSansBengali.className} min-h-screen bg-zinc-950 px-4 py-10 sm:px-6 sm:py-16`}
+      className={`${notoSansBengali.className} min-h-screen bg-zinc-50 px-4 py-10 sm:px-6 sm:py-16 dark:bg-zinc-950`}
     >
       <div className="mx-auto w-full max-w-4xl">
         {/* Back link */}
         <Link
           href="/"
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-zinc-500 transition-colors hover:text-emerald-400"
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-zinc-600 transition-colors hover:text-emerald-600 dark:text-zinc-400 dark:hover:text-emerald-400"
         >
           ← হোমে ফিরুন
         </Link>
@@ -122,7 +173,7 @@ export default function ProductViewPage({ params }: { params: Promise<{ productI
           {/* ── Left: image gallery with zoom ─────────────────────────────────────── */}
           <div className="space-y-4">
             {/* Main Image */}
-            <div className="relative overflow-hidden rounded-2xl border border-zinc-800 bg-zinc-900">
+            <div className="relative overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
               <div 
                 className="relative aspect-square w-full overflow-hidden cursor-zoom-in"
                 onMouseMove={handleMouseMove}
@@ -147,8 +198,10 @@ export default function ProductViewPage({ params }: { params: Promise<{ productI
                     )}
                   </>
                 ) : (
-                  <div className="flex h-full items-center justify-center bg-gradient-to-br from-zinc-900 to-zinc-950">
-                    <span className="text-6xl select-none">🛍️</span>
+                  <div className="flex h-full items-center justify-center bg-gradient-to-br from-zinc-100 to-zinc-200 dark:from-zinc-900 dark:to-zinc-950">
+                    <svg className="h-16 w-16 text-zinc-400 dark:text-zinc-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                    </svg>
                   </div>
                 )}
               </div>
@@ -172,7 +225,7 @@ export default function ProductViewPage({ params }: { params: Promise<{ productI
                     className={`relative h-20 w-20 shrink-0 overflow-hidden rounded-lg border-2 transition-all ${
                       selectedImage === -1
                         ? "border-emerald-500 opacity-100"
-                        : "border-zinc-700 opacity-60 hover:opacity-100"
+                        : "border-zinc-200 opacity-60 hover:opacity-100 dark:border-zinc-700"
                     }`}
                   >
                     <Image
@@ -191,7 +244,7 @@ export default function ProductViewPage({ params }: { params: Promise<{ productI
                     className={`relative h-20 w-20 shrink-0 overflow-hidden rounded-lg border-2 transition-all ${
                       selectedImage === index
                         ? "border-emerald-500 opacity-100"
-                        : "border-zinc-700 opacity-60 hover:opacity-100"
+                        : "border-zinc-200 opacity-60 hover:opacity-100 dark:border-zinc-700"
                     }`}
                   >
                     <Image
@@ -210,7 +263,7 @@ export default function ProductViewPage({ params }: { params: Promise<{ productI
           {/* ── Right: product details ───────────────────────────────────────── */}
           <div className="flex flex-col">
             {/* Halal badge */}
-            <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-emerald-800/50 bg-emerald-950/40 px-3 py-1 text-xs font-semibold text-emerald-400">
+            <span className="inline-flex w-fit items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 dark:border-emerald-800/50 dark:bg-emerald-950/40 dark:text-emerald-400">
               <svg
                 className="h-3.5 w-3.5"
                 viewBox="0 0 20 20"
@@ -226,22 +279,22 @@ export default function ProductViewPage({ params }: { params: Promise<{ productI
             </span>
 
             {/* Title */}
-            <h1 className="mt-4 text-2xl font-bold leading-snug tracking-tight text-zinc-50 sm:text-3xl">
+            <h1 className="mt-4 text-2xl font-bold leading-snug tracking-tight text-zinc-950 sm:text-3xl dark:text-zinc-50">
               {product.title}
             </h1>
 
             {/* Price */}
             <div className="mt-5 flex items-baseline gap-3">
-              <span className="text-4xl font-bold tracking-tight text-emerald-400">
+              <span className="text-4xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400">
                 {formatBdt(product.price)}
               </span>
             </div>
 
             {/* Divider */}
-            <div className="my-6 border-t border-zinc-800" />
+            <div className="my-6 border-t border-zinc-200 dark:border-zinc-800" />
 
             {/* Description */}
-            <p className="text-sm leading-7 text-zinc-400">
+            <p className="text-sm leading-7 text-zinc-600 dark:text-zinc-400">
               {product.description}
             </p>
 
@@ -254,7 +307,7 @@ export default function ProductViewPage({ params }: { params: Promise<{ productI
               />
               <span
                 className={`text-sm font-medium ${
-                  isOutOfStock ? "text-red-400" : "text-zinc-400"
+                  isOutOfStock ? "text-red-600 dark:text-red-400" : "text-zinc-600 dark:text-zinc-400"
                 }`}
               >
                 {isOutOfStock
@@ -264,11 +317,11 @@ export default function ProductViewPage({ params }: { params: Promise<{ productI
             </div>
 
             {/* Commission info for promoters */}
-            <div className="mt-4 rounded-xl border border-zinc-800 bg-zinc-900/60 px-4 py-3">
-              <p className="text-xs font-medium text-zinc-500">
+            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-900/50 dark:bg-amber-950/30">
+              <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
                 প্রমোটার কমিশন
               </p>
-              <p className="mt-0.5 text-sm font-semibold text-amber-400">
+              <p className="mt-0.5 text-sm font-semibold text-amber-800 dark:text-amber-300">
                 {product.commissionPercentage}% ={" "}
                 {formatBdt(
                   (product.price * product.commissionPercentage) / 100
@@ -298,20 +351,54 @@ export default function ProductViewPage({ params }: { params: Promise<{ productI
                 disabled={isOutOfStock}
                 className={`inline-flex h-13 w-full items-center justify-center rounded-xl px-6 text-base font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ${
                   isOutOfStock
-                    ? "pointer-events-none cursor-not-allowed bg-zinc-800 text-zinc-500"
-                    : "bg-emerald-700 text-white hover:bg-emerald-600 focus-visible:outline-emerald-500"
+                    ? "pointer-events-none cursor-not-allowed bg-zinc-200 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-500"
+                    : "bg-emerald-700 text-white hover:bg-emerald-600 focus-visible:outline-emerald-500 dark:bg-emerald-600 dark:hover:bg-emerald-500"
                 }`}
               >
                 {isOutOfStock ? "স্টক নেই" : "কার্টে যোগ করুন"}
               </button>
 
-              <p className="text-center text-xs text-zinc-600">
+              <button
+                onClick={() => {
+                  // Add to comparison
+                  const comparisonItem = {
+                    _id: product._id,
+                    title: product.title,
+                    price: product.price,
+                    description: product.description,
+                    category: product.category,
+                    stockQuantity: product.stockQuantity,
+                    imageUrl: product.imageUrl,
+                    commissionPercentage: product.commissionPercentage,
+                  };
+                  const existingComparison = JSON.parse(localStorage.getItem("inshirah_compare") || "[]");
+                  
+                  // Check if already in comparison
+                  if (existingComparison.some((p: any) => p._id === product._id)) {
+                    return;
+                  }
+                  
+                  // Limit to 4 products
+                  if (existingComparison.length >= 4) {
+                    alert("সর্বোচ্চ ৪টি প্রোডাক্ট তুলনা করতে পারবেন");
+                    return;
+                  }
+                  
+                  const updatedComparison = [...existingComparison, comparisonItem];
+                  localStorage.setItem("inshirah_compare", JSON.stringify(updatedComparison));
+                }}
+                className="inline-flex w-full items-center justify-center rounded-xl border border-zinc-300 bg-white px-6 py-3 text-base font-semibold text-zinc-700 transition-colors hover:border-zinc-400 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-600 dark:hover:bg-zinc-800"
+              >
+                তুলনায় যোগ করুন
+              </button>
+
+              <p className="text-center text-xs text-zinc-500 dark:text-zinc-500">
                 শারীয়াহ-সম্মত লেনদেন। কোনো সুদ বা অনৈতিক শর্ত নেই।
               </p>
             </div>
 
             {/* Trust signals */}
-            <div className="mt-8 grid grid-cols-3 gap-3 border-t border-zinc-800 pt-6">
+            <div className="mt-8 grid grid-cols-3 gap-3 border-t border-zinc-200 pt-6 dark:border-zinc-800">
               {[
                 { icon: "🛡️", label: "শারীয়াহ যাচাইকৃত" },
                 { icon: "📦", label: "ফিজিক্যাল স্টক" },
@@ -319,7 +406,7 @@ export default function ProductViewPage({ params }: { params: Promise<{ productI
               ].map((item) => (
                 <div key={item.label} className="flex flex-col items-center gap-1.5 text-center">
                   <span className="text-xl">{item.icon}</span>
-                  <span className="text-xs font-medium text-zinc-500">
+                  <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
                     {item.label}
                   </span>
                 </div>
@@ -327,6 +414,186 @@ export default function ProductViewPage({ params }: { params: Promise<{ productI
             </div>
           </div>
         </div>
+
+        {/* Reviews Section */}
+        <div className="mt-16 border-t border-zinc-200 pt-12 dark:border-zinc-800">
+          <h2 className="text-2xl font-bold text-zinc-950 dark:text-zinc-50">ক্রেতা রিভিউ</h2>
+
+          {reviewSummary && (
+            <div className="mt-6 rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900/60">
+              <div className="flex items-center gap-4">
+                <div className="text-center">
+                  <p className="text-4xl font-bold text-zinc-950 dark:text-zinc-50">
+                    {reviewSummary.averageRating}
+                  </p>
+                  <div className="flex gap-0.5 mt-1">
+                    {[1, 2, 3, 4, 5].map((star) => (
+                      <span
+                        key={star}
+                        className={`text-lg ${
+                          star <= Math.round(reviewSummary.averageRating)
+                            ? "text-amber-400"
+                            : "text-zinc-300 dark:text-zinc-700"
+                        }`}
+                      >
+                        ★
+                      </span>
+                    ))}
+                  </div>
+                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-500">
+                    {reviewSummary.totalReviews} টি রিভিউ
+                  </p>
+                </div>
+                <div className="flex-1 space-y-2">
+                  {[5, 4, 3, 2, 1].map((rating) => {
+                    const count = reviewSummary.ratingDistribution[rating - 1];
+                    const percentage =
+                      reviewSummary.totalReviews > 0
+                        ? (count / reviewSummary.totalReviews) * 100
+                        : 0;
+                    return (
+                      <div key={rating} className="flex items-center gap-2">
+                        <span className="w-6 text-xs text-zinc-600 dark:text-zinc-400">{rating}★</span>
+                        <div className="flex-1 h-2 rounded-full bg-zinc-200 dark:bg-zinc-800">
+                          <div
+                            className="h-2 rounded-full bg-amber-400"
+                            style={{ width: `${percentage}%` }}
+                          />
+                        </div>
+                        <span className="w-8 text-xs text-zinc-500 text-right dark:text-zinc-500">
+                          {count}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div className="mt-8 space-y-4">
+            {reviews.length === 0 ? (
+              <p className="text-center text-zinc-500 py-8 dark:text-zinc-500">
+                এখনো কোনো রিভিউ নেই। প্রথম রিভিউ দিন!
+              </p>
+            ) : (
+              reviews.map((review) => (
+                <div
+                  key={review._id}
+                  className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900/60"
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <div className="flex gap-0.5">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <span
+                              key={star}
+                              className={`text-sm ${
+                                star <= review.rating
+                                  ? "text-amber-400"
+                                  : "text-zinc-300 dark:text-zinc-700"
+                              }`}
+                            >
+                              ★
+                            </span>
+                          ))}
+                        </div>
+                        {review.isVerifiedPurchase && (
+                          <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400">
+                            ভেরিফাইড পারচেস
+                          </span>
+                        )}
+                      </div>
+                      <h3 className="mt-2 font-semibold text-zinc-950 dark:text-zinc-50">
+                        {review.title}
+                      </h3>
+                      <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+                        {review.comment}
+                      </p>
+                      {review.images && review.images.length > 0 && (
+                        <div className="mt-3 flex gap-2">
+                          {review.images.map((img, idx) => (
+                            <div
+                              key={idx}
+                              className="relative h-16 w-16 overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800"
+                            >
+                              <Image
+                                src={img}
+                                alt={`Review image ${idx + 1}`}
+                                fill
+                                className="object-cover"
+                                unoptimized
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <div className="mt-3 flex items-center gap-4 text-xs text-zinc-500 dark:text-zinc-500">
+                        <span>
+                          {new Date(review.createdAt).toLocaleDateString("bn-BD")}
+                        </span>
+                        <button
+                          className="hover:text-zinc-700 dark:hover:text-zinc-400 transition-colors"
+                          onClick={() => {
+                            // Handle helpful vote
+                            fetch(`/api/reviews/${review._id}/helpful`, {
+                              method: "POST",
+                            });
+                          }}
+                        >
+                          সহায়ক ({review.helpfulCount})
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* Related Products */}
+        {relatedProducts.length > 0 && (
+          <div className="mt-16 border-t border-zinc-200 pt-12 dark:border-zinc-800">
+            <h2 className="text-2xl font-bold text-zinc-950 dark:text-zinc-50">সম্পর্কিত প্রোডাক্ট</h2>
+            <div className="mt-6 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+              {relatedProducts.map((relatedProduct) => (
+                <Link
+                  key={relatedProduct._id}
+                  href={`/products/${relatedProduct._id}`}
+                  className="group block overflow-hidden rounded-2xl border border-zinc-200 bg-white transition-all hover:border-emerald-300 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:border-emerald-700"
+                >
+                  <div className="relative aspect-square overflow-hidden bg-zinc-100 dark:bg-zinc-950">
+                    {relatedProduct.imageUrl ? (
+                      <Image
+                        src={relatedProduct.imageUrl}
+                        alt={relatedProduct.title}
+                        fill
+                        className="object-cover transition-transform group-hover:scale-105"
+                        unoptimized
+                      />
+                    ) : (
+                      <div className="flex h-full items-center justify-center text-zinc-400 dark:text-zinc-600">
+                        <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
+                        </svg>
+                      </div>
+                    )}
+                  </div>
+                  <div className="p-4">
+                    <h3 className="line-clamp-2 text-sm font-semibold text-zinc-950 group-hover:text-emerald-600 dark:text-zinc-50 dark:group-hover:text-emerald-400">
+                      {relatedProduct.title}
+                    </h3>
+                    <p className="mt-2 text-lg font-bold text-emerald-600 dark:text-emerald-400">
+                      {formatBdt(relatedProduct.price)}
+                    </p>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

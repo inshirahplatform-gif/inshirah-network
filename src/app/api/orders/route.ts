@@ -4,12 +4,65 @@ import { dbConnect } from "@/lib/dbConnect";
 import { verifySession, COOKIE_NAME } from "@/lib/session";
 import { Order, Product, Promoter } from "@/models";
 
+// GET /api/orders - Get user's orders
+export async function GET(request: NextRequest) {
+  try {
+    const cookieStore = await cookies();
+    const sessionCookie = cookieStore.get(COOKIE_NAME);
+
+    if (!sessionCookie) {
+      return NextResponse.json({ error: "অনুগ্রহ করে লগ-ইন করুন" }, { status: 401 });
+    }
+
+    const session = await verifySession(sessionCookie.value);
+    if (!session) {
+      return NextResponse.json({ error: "সেশন মেয়াদ শেষ। পুনরায় লগ-ইন করুন।" }, { status: 401 });
+    }
+
+    await dbConnect();
+
+    const orders = await Order.find({ userId: session.userId })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    // Fetch product details for each order item
+    const ordersWithProductDetails = await Promise.all(
+      orders.map(async (order) => {
+        const itemsWithDetails = await Promise.all(
+          order.items.map(async (item: any) => {
+            const product = await Product.findById(item.productId).select(
+              "title imageUrl"
+            );
+            return {
+              ...item,
+              title: product?.title || "Unknown Product",
+              imageUrl: product?.imageUrl || "",
+            };
+          })
+        );
+        return {
+          ...order,
+          items: itemsWithDetails,
+        };
+      })
+    );
+
+    return NextResponse.json({ orders: ordersWithProductDetails }, { status: 200 });
+  } catch (error) {
+    console.error("Orders fetch error:", error);
+    return NextResponse.json(
+      { error: "অর্ডার লোড করতে সমস্যা হয়েছে" },
+      { status: 500 }
+    );
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     await dbConnect();
 
     const body = await request.json();
-    const { items, customerName, customerPhone, shippingAddress, totalAmount } = body;
+    const { items, customerName, customerPhone, shippingAddress, totalAmount, paymentMethod } = body;
 
     // Validate required fields
     if (!items || !Array.isArray(items) || items.length === 0) {
@@ -98,10 +151,12 @@ export async function POST(request: NextRequest) {
 
     // Create the order (group by merchant if needed, for now create single order)
     const order = await Order.create({
+      userId: session?.userId,
       items: orderItems,
       customerName,
       customerPhone,
       shippingAddress,
+      paymentMethod: paymentMethod || "cod",
       totalAmount: calculatedTotal,
       commissionAmount: totalCommission,
       promoterId: finalPromoterId,

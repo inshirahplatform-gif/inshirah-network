@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { dbConnect } from "@/lib/dbConnect";
-import { Order } from "@/models";
+import { Order, Product } from "@/models";
 
 // Public endpoint - no auth required for order tracking
 export async function GET(
@@ -11,9 +11,7 @@ export async function GET(
     const { id } = await params;
     await dbConnect();
 
-    const order = await Order.findById(id)
-      .populate("items.productId")
-      .lean();
+    const order = await Order.findById(id).lean();
 
     if (!order) {
       return NextResponse.json(
@@ -22,7 +20,24 @@ export async function GET(
       );
     }
 
-    return NextResponse.json({ order }, { status: 200 });
+    // Fetch product details for each order item
+    const itemsWithDetails = await Promise.all(
+      order.items.map(async (item: any) => {
+        const product = await Product.findById(item.productId).select(
+          "title imageUrl"
+        );
+        return {
+          ...item,
+          title: product?.title || "Unknown Product",
+          imageUrl: product?.imageUrl || "",
+        };
+      })
+    );
+
+    return NextResponse.json(
+      { order: { ...order, items: itemsWithDetails } },
+      { status: 200 }
+    );
   } catch (error) {
     console.error("Order fetch error:", error);
     return NextResponse.json(

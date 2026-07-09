@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Noto_Sans_Bengali } from "next/font/google";
 import { useRouter } from "next/navigation";
@@ -35,6 +35,27 @@ export default function LoginPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [banner, setBanner] = useState<Banner>(null);
+
+  useEffect(() => {
+    // Check if user is already logged in
+    const checkSession = async () => {
+      try {
+        const res = await fetch("/api/auth/session");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.user) {
+            // Redirect to appropriate dashboard based on role
+            if (data.user.role === "promoter") router.push("/promoter/dashboard");
+            else if (data.user.role === "merchant") router.push("/merchant/dashboard");
+            else if (data.user.role === "admin") router.push("/admin/dashboard");
+          }
+        }
+      } catch {
+        // Silently fail - user will see login form
+      }
+    };
+    checkSession();
+  }, [router]);
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};

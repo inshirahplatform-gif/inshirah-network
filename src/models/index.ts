@@ -8,3 +8,6 @@ export {
   PasswordResetToken,
   type PasswordResetTokenDocument,
 } from "./passwordResetToken";
+export { Review, type ReviewDocument } from "./review";
+export { Wishlist, type WishlistDocument } from "./wishlist";
+export { default as Installment, type InstallmentDocument } from "./installment";

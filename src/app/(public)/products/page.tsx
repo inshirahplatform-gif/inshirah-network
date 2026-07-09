@@ -30,16 +30,28 @@ function formatBdt(amount: number) {
 
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
-  const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
+  const [minPrice, setMinPrice] = useState("");
+  const [maxPrice, setMaxPrice] = useState("");
+  const [sortBy, setSortBy] = useState("newest");
+
+  const CATEGORIES = ["all", "ইলেকট্রনিক্স", "পোশাক", "বই", "খাবার", "স্বাস্থ্য", "ঘরসজ্জা", "অন্যান্য"];
 
   useEffect(() => {
     const fetchProducts = async () => {
+      setIsLoading(true);
       try {
-        const res = await fetch("/api/products");
+        const params = new URLSearchParams();
+        if (searchQuery) params.append("search", searchQuery);
+        if (selectedCategory !== "all") params.append("category", selectedCategory);
+        if (minPrice) params.append("minPrice", minPrice);
+        if (maxPrice) params.append("maxPrice", maxPrice);
+        if (sortBy) params.append("sort", sortBy);
+
+        const res = await fetch(`/api/products?${params.toString()}`);
         const data = await res.json();
 
         if (!res.ok) {
@@ -48,7 +60,6 @@ export default function ProductsPage() {
         }
 
         setProducts(data.products || []);
-        setFilteredProducts(data.products || []);
       } catch {
         setError("নেটওয়ার্ক সমস্যা হয়েছে। পেজ রিফ্রেশ করুন।");
       } finally {
@@ -57,29 +68,7 @@ export default function ProductsPage() {
     };
 
     fetchProducts();
-  }, []);
-
-  useEffect(() => {
-    let filtered = products;
-
-    // Filter by category
-    if (selectedCategory !== "all") {
-      filtered = filtered.filter((product) => product.category === selectedCategory);
-    }
-
-    // Filter by search query
-    if (searchQuery.trim() !== "") {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter((product) =>
-        product.title.toLowerCase().includes(query)
-      );
-    }
-
-    setFilteredProducts(filtered);
-  }, [searchQuery, selectedCategory, products]);
-
-  // Get unique categories
-  const categories = Array.from(new Set(products.map((p) => p.category).filter((c): c is string => Boolean(c))));
+  }, [searchQuery, selectedCategory, minPrice, maxPrice, sortBy]);
 
   return (
     <div className={`${notoSansBengali.className} min-h-screen bg-zinc-950`}>
@@ -119,80 +108,126 @@ export default function ProductsPage() {
             </div>
             {searchQuery && (
               <p className="mt-2 text-sm text-zinc-400">
-                {filteredProducts.length} টি প্রোডাক্ট পাওয়া গেছে
+                {products.length} টি প্রোডাক্ট পাওয়া গেছে
               </p>
+            )}
+          </div>
+
+          {/* Filters */}
+          <div className="mt-6 flex flex-wrap gap-4">
+            {/* Price Range */}
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                placeholder="সর্বনিম্ন"
+                value={minPrice}
+                onChange={(e) => setMinPrice(e.target.value)}
+                className="w-24 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-50 focus:border-emerald-700 focus:outline-none"
+              />
+              <span className="text-zinc-500">-</span>
+              <input
+                type="number"
+                placeholder="সর্বোচ্চ"
+                value={maxPrice}
+                onChange={(e) => setMaxPrice(e.target.value)}
+                className="w-24 rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-50 focus:border-emerald-700 focus:outline-none"
+              />
+            </div>
+
+            {/* Sort */}
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-50 focus:border-emerald-700 focus:outline-none"
+            >
+              <option value="newest">নতুন আগে</option>
+              <option value="price-low">দাম কম থেকে বেশি</option>
+              <option value="price-high">দাম বেশি থেকে কম</option>
+              <option value="popular">জনপ্রিয়</option>
+            </select>
+
+            {/* Clear Filters */}
+            {(searchQuery || selectedCategory !== "all" || minPrice || maxPrice || sortBy !== "newest") && (
+              <button
+                onClick={() => {
+                  setSearchQuery("");
+                  setSelectedCategory("all");
+                  setMinPrice("");
+                  setMaxPrice("");
+                  setSortBy("newest");
+                }}
+                className="rounded-lg border border-zinc-800 bg-zinc-900 px-3 py-2 text-sm text-zinc-400 hover:border-zinc-700 hover:text-zinc-300"
+              >
+                ফিল্টার সাফ করুন
+              </button>
             )}
           </div>
         </section>
 
         <div className="flex gap-8">
           {/* Sidebar Categories */}
-          {categories.length > 0 && (
-            <aside className="hidden w-64 shrink-0 lg:block">
-              <div className="sticky top-8 rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
-                <h2 className="text-sm font-semibold text-zinc-50 mb-4">ক্যাটাগরি</h2>
-                <nav className="space-y-1">
+          <aside className="hidden w-64 shrink-0 lg:block">
+            <div className="sticky top-8 rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
+              <h2 className="text-sm font-semibold text-zinc-50 mb-4">ক্যাটাগরি</h2>
+              <nav className="space-y-1">
+                <button
+                  onClick={() => setSelectedCategory("all")}
+                  className={`w-full rounded-lg px-3 py-2 text-left text-sm transition-colors ${
+                    selectedCategory === "all"
+                      ? "bg-emerald-950/40 text-emerald-400 font-medium"
+                      : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-300"
+                  }`}
+                >
+                  সব প্রোডাক্ট
+                </button>
+                {CATEGORIES.filter((c) => c !== "all").map((category) => (
                   <button
-                    onClick={() => setSelectedCategory("all")}
+                    key={category}
+                    onClick={() => setSelectedCategory(category)}
                     className={`w-full rounded-lg px-3 py-2 text-left text-sm transition-colors ${
-                      selectedCategory === "all"
+                      selectedCategory === category
                         ? "bg-emerald-950/40 text-emerald-400 font-medium"
                         : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-300"
                     }`}
                   >
-                    সব প্রোডাক্ট
+                    {category}
                   </button>
-                  {categories.map((category) => (
-                    <button
-                      key={category}
-                      onClick={() => setSelectedCategory(category)}
-                      className={`w-full rounded-lg px-3 py-2 text-left text-sm transition-colors ${
-                        selectedCategory === category
-                          ? "bg-emerald-950/40 text-emerald-400 font-medium"
-                          : "text-zinc-400 hover:bg-zinc-800 hover:text-zinc-300"
-                      }`}
-                    >
-                      {category}
-                    </button>
-                  ))}
-                </nav>
-              </div>
-            </aside>
-          )}
+                ))}
+              </nav>
+            </div>
+          </aside>
 
           {/* Main Content */}
           <div className="flex-1">
             {/* Mobile Category Filter */}
-            {categories.length > 0 && (
-              <div className="mb-6 lg:hidden">
-                <p className="text-sm font-medium text-zinc-400 mb-3">ক্যাটাগরি</p>
-                <div className="flex flex-wrap gap-2">
+            <div className="mb-6 lg:hidden">
+              <p className="text-sm font-medium text-zinc-400 mb-3">ক্যাটাগরি</p>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => setSelectedCategory("all")}
+                  className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
+                    selectedCategory === "all"
+                      ? "border-emerald-700 bg-emerald-950/40 text-emerald-400"
+                      : "border-zinc-800 bg-zinc-900 text-zinc-400 hover:border-zinc-700 hover:text-zinc-300"
+                  }`}
+                >
+                  সব
+                </button>
+                {CATEGORIES.filter((c) => c !== "all").map((category) => (
                   <button
-                    onClick={() => setSelectedCategory("all")}
+                    key={category}
+                    onClick={() => setSelectedCategory(category)}
                     className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
-                      selectedCategory === "all"
+                      selectedCategory === category
                         ? "border-emerald-700 bg-emerald-950/40 text-emerald-400"
                         : "border-zinc-800 bg-zinc-900 text-zinc-400 hover:border-zinc-700 hover:text-zinc-300"
                     }`}
                   >
-                    সব
+                    {category}
                   </button>
-                  {categories.map((category) => (
-                    <button
-                      key={category}
-                      onClick={() => setSelectedCategory(category)}
-                      className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${
-                        selectedCategory === category
-                          ? "border-emerald-700 bg-emerald-950/40 text-emerald-400"
-                          : "border-zinc-800 bg-zinc-900 text-zinc-400 hover:border-zinc-700 hover:text-zinc-300"
-                      }`}
-                    >
-                      {category}
-                    </button>
-                  ))}
-                </div>
+                ))}
               </div>
-            )}
+            </div>
 
             {/* Error State */}
             {error && (
@@ -226,20 +261,9 @@ export default function ProductsPage() {
                   </p>
                 </div>
               </div>
-            ) : filteredProducts.length === 0 ? (
-              <div className="flex min-h-[400px] items-center justify-center rounded-2xl border border-zinc-800 bg-zinc-900">
-                <div className="text-center">
-                  <p className="text-lg font-medium text-zinc-50">
-                    কোন প্রোডাক্ট পাওয়া যায়নি
-                  </p>
-                  <p className="mt-2 text-sm text-zinc-400">
-                    অন্য কোনো সার্চ টার্ম চেষ্টা করুন
-                  </p>
-                </div>
-              </div>
             ) : (
               <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                {filteredProducts.map((product) => (
+                {products.map((product) => (
                   <Link
                     key={product._id}
                     href={`/products/${product._id}`}

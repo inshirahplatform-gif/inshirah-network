@@ -35,6 +35,7 @@ export default function CheckoutPage() {
     customerName: "",
     customerPhone: "",
     shippingAddress: "",
+    paymentMethod: "cod",
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -99,6 +100,7 @@ export default function CheckoutPage() {
           customerPhone: formData.customerPhone,
           shippingAddress: formData.shippingAddress,
           totalAmount,
+          paymentMethod: formData.paymentMethod,
         }),
       });
 
@@ -242,6 +244,89 @@ export default function CheckoutPage() {
                   )}
                 </div>
               </div>
+            </div>
+
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-6">
+              <h2 className="text-xl font-semibold text-zinc-50">পেমেন্ট পদ্ধতি</h2>
+
+              <div className="mt-6 space-y-3">
+                <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-zinc-800 bg-zinc-950 p-4 transition-colors hover:border-emerald-700/50 has-[:checked]:border-emerald-700 has-[:checked]:bg-emerald-950/20">
+                  <input
+                    type="radio"
+                    name="paymentMethod"
+                    value="cod"
+                    checked={formData.paymentMethod === "cod"}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, paymentMethod: e.target.value }))}
+                    disabled={isSubmitting}
+                    className="mt-1 h-4 w-4 border-zinc-600 bg-zinc-950 text-emerald-600 focus:ring-emerald-500 focus:ring-offset-zinc-950"
+                  />
+                  <div>
+                    <p className="text-sm font-medium text-zinc-50">ক্যাশ অন ডেলিভারি (COD)</p>
+                    <p className="mt-1 text-xs text-zinc-400">প্রোডাক্ট হাতে পেয়ে টাকা দিন</p>
+                  </div>
+                </label>
+
+                <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-zinc-800 bg-zinc-950 p-4 transition-colors hover:border-emerald-700/50 has-[:checked]:border-emerald-700 has-[:checked]:bg-emerald-950/20">
+                  <input
+                    type="radio"
+                    name="paymentMethod"
+                    value="bkash"
+                    checked={formData.paymentMethod === "bkash"}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, paymentMethod: e.target.value }))}
+                    disabled={isSubmitting}
+                    className="mt-1 h-4 w-4 border-zinc-600 bg-zinc-950 text-emerald-600 focus:ring-emerald-500 focus:ring-offset-zinc-950"
+                  />
+                  <div>
+                    <p className="text-sm font-medium text-zinc-50">বিকাশ</p>
+                    <p className="mt-1 text-xs text-zinc-400">বিকাশ পেমেন্ট</p>
+                  </div>
+                </label>
+
+                <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-zinc-800 bg-zinc-950 p-4 transition-colors hover:border-emerald-700/50 has-[:checked]:border-emerald-700 has-[:checked]:bg-emerald-950/20">
+                  <input
+                    type="radio"
+                    name="paymentMethod"
+                    value="nagad"
+                    checked={formData.paymentMethod === "nagad"}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, paymentMethod: e.target.value }))}
+                    disabled={isSubmitting}
+                    className="mt-1 h-4 w-4 border-zinc-600 bg-zinc-950 text-emerald-600 focus:ring-emerald-500 focus:ring-offset-zinc-950"
+                  />
+                  <div>
+                    <p className="text-sm font-medium text-zinc-50">নগদ</p>
+                    <p className="mt-1 text-xs text-zinc-400">নগদ পেমেন্ট</p>
+                  </div>
+                </label>
+
+                <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-zinc-800 bg-zinc-950 p-4 transition-colors hover:border-emerald-700/50 has-[:checked]:border-emerald-700 has-[:checked]:bg-emerald-950/20">
+                  <input
+                    type="radio"
+                    name="paymentMethod"
+                    value="bank_transfer"
+                    checked={formData.paymentMethod === "bank_transfer"}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, paymentMethod: e.target.value }))}
+                    disabled={isSubmitting}
+                    className="mt-1 h-4 w-4 border-zinc-600 bg-zinc-950 text-emerald-600 focus:ring-emerald-500 focus:ring-offset-zinc-950"
+                  />
+                  <div>
+                    <p className="text-sm font-medium text-zinc-50">ব্যাংক ট্রান্সফার</p>
+                    <p className="mt-1 text-xs text-zinc-400">ব্যাংক অ্যাকাউন্টে টাকা পাঠান</p>
+                  </div>
+                </label>
+              </div>
+
+              {formData.paymentMethod !== "cod" && (
+                <div className="mt-4 rounded-xl border border-amber-900/50 bg-amber-950/20 p-4">
+                  <p className="flex items-start gap-2 text-sm font-medium text-amber-400">
+                    <svg className="mt-0.5 h-5 w-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd"/>
+                    </svg>
+                    <span>
+                      অনলাইন পেমেন্ট শীঘ্রই যুক্ত করা হবে। বর্তমানে ক্যাশ অন ডেলিভারি সিলেক্ট করুন।
+                    </span>
+                  </p>
+                </div>
+              )}
             </div>
 
             <button
